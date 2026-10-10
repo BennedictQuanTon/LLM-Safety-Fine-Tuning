@@ -17,7 +17,9 @@
 # %%
 import glob
 import hashlib
+import inspect
 import json
+import math
 import os
 import re
 import shutil
@@ -27,6 +29,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+import transformers
 from datasets import Dataset
 from scipy.sparse import hstack
 from scipy.stats import rankdata
@@ -210,6 +213,16 @@ def positive_prob(logits):
     return torch.softmax(torch.tensor(logits, dtype=torch.float32), dim=-1)[:, 1].numpy()
 
 
+TRAINING_ARG_NAMES = set(inspect.signature(TrainingArguments.__init__).parameters)
+
+
+def make_training_args(**kwargs):
+    unsupported = sorted(k for k in kwargs if k not in TRAINING_ARG_NAMES)
+    if unsupported:
+        print(f"⚠️ transformers {transformers.__version__} không hỗ trợ {unsupported}, bỏ qua các tham số này.")
+    return TrainingArguments(**{k: v for k, v in kwargs.items() if k in TRAINING_ARG_NAMES})
+
+
 def run_transformer(cfg):
     tokenizer = AutoTokenizer.from_pretrained(cfg["name"])
     dev_ids = head_tail_encode(tokenizer, X_dev, cfg["max_len"], cfg["head_len"])
@@ -223,14 +236,15 @@ def run_transformer(cfg):
         t0 = time.time()
         fold_dir = f"/kaggle/working/tmp_{cfg['name'].split('/')[-1]}_fold{k}"
         model = AutoModelForSequenceClassification.from_pretrained(cfg["name"], num_labels=2)
-        args = TrainingArguments(
+        steps_per_epoch = math.ceil(len(tr) / (cfg["batch_size"] * cfg["grad_accum"]))
+        args = make_training_args(
             output_dir=fold_dir,
             per_device_train_batch_size=cfg["batch_size"],
             per_device_eval_batch_size=cfg["batch_size"] * 4,
             gradient_accumulation_steps=cfg["grad_accum"],
             learning_rate=cfg["lr"],
             num_train_epochs=cfg["epochs"],
-            warmup_ratio=0.1,
+            warmup_steps=math.ceil(0.1 * steps_per_epoch * cfg["epochs"]),
             weight_decay=0.01,
             lr_scheduler_type="cosine",
             fp16=torch.cuda.is_available(),

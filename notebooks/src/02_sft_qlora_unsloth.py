@@ -170,6 +170,12 @@ print(DATA_STATS)
 # `load_best_model_at_end` giữ lại checkpoint có `eval_loss` thấp nhất; early stopping dừng khi `eval_loss` không giảm sau 5 lần đánh giá liên tiếp.
 
 # %%
+TOTAL_STEPS = CONFIG["max_steps"] if CONFIG["max_steps"] > 0 else (
+    int(np.ceil(DATA_STATS["n_train"] / EFFECTIVE_BATCH)) * CONFIG["num_train_epochs"]
+)
+WARMUP_STEPS = int(np.ceil(TOTAL_STEPS * CONFIG["warmup_ratio"]))
+print(f"Tổng số bước ≈ {TOTAL_STEPS} | warmup = {WARMUP_STEPS} bước")
+
 args = SFTConfig(
     output_dir=CONFIG["output_dir"],
     dataset_text_field="text",
@@ -181,7 +187,7 @@ args = SFTConfig(
     max_steps=CONFIG["max_steps"],
     learning_rate=CONFIG["learning_rate"],
     lr_scheduler_type=CONFIG["lr_scheduler_type"],
-    warmup_ratio=CONFIG["warmup_ratio"],
+    warmup_steps=WARMUP_STEPS,
     weight_decay=CONFIG["weight_decay"],
     max_grad_norm=CONFIG["max_grad_norm"],
     optim="adamw_8bit",
@@ -284,7 +290,6 @@ eval_log = log[log["eval_loss"].notna()].reset_index(drop=True) if "eval_loss" i
 log.merge(health, on="step", how="left").to_csv("/kaggle/working/training_log.csv", index=False)
 
 TOTAL_STEPS = trainer.state.max_steps
-WARMUP_STEPS = int(np.ceil(TOTAL_STEPS * CONFIG["warmup_ratio"]))
 PRECISION = "bf16" if is_bfloat16_supported() else "fp16"
 GPU = torch.cuda.get_device_properties(0)
 VRAM_TOTAL_GB = GPU.total_memory / 1024**3
