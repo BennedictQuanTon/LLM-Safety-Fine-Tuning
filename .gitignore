@@ -1,5 +1,13 @@
 .DS_Store
 *.log
 rmit-hackathon-2025/
-HOC_FINE_TUNING_A_Z.md
-Plan.md
+__pycache__/
+
+*.md
+!README.md
+!results/clf/REPORT.md
+
+results/__results___files/
+results/__huggingface_repos__.json
+results/clf/*.csv
+results/clf/models/**/preds.npz

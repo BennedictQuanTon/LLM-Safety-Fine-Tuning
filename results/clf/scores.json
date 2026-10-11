@@ -1,0 +1,120 @@
+{
+  "run_id": "clf_20261011-060132",
+  "verdict": [
+    "`ensemble_clean`: CHƯA đạt top 3: thiếu 0.00556 so với mốc 0.99658. Hạng tương đương **#28** (CI 95%: #7 … #41)"
+  ],
+  "weights": {
+    "ensemble_clean": {
+      "tfidf": 0.2,
+      "deberta-v3-base": 0.4,
+      "qwen2.5-3b": 0.4
+    }
+  },
+  "models": [
+    {
+      "model": "ensemble_clean",
+      "cv_auc": 0.9898346602835844,
+      "holdout_auc": 0.9910170483257534,
+      "ci95_low": 0.9847347124176881,
+      "ci95_high": 0.9959824505020928,
+      "rank_2025": "#28",
+      "rank_range": "#7 … #41"
+    },
+    {
+      "model": "qwen2.5-3b",
+      "cv_auc": 0.9817204179093109,
+      "holdout_auc": 0.990418628155004,
+      "ci95_low": 0.9853327801794265,
+      "ci95_high": 0.9947410747649355,
+      "rank_2025": "#31",
+      "rank_range": "#10 … #40"
+    },
+    {
+      "model": "deberta-v3-base",
+      "cv_auc": 0.9833781097167925,
+      "holdout_auc": 0.9836431819995213,
+      "ci95_low": 0.9749042035821553,
+      "ci95_high": 0.990960494384377,
+      "rank_2025": "#43",
+      "rank_range": "#28 … ngoài top 49 (/110)"
+    },
+    {
+      "model": "tfidf",
+      "cv_auc": 0.9604973845217002,
+      "holdout_auc": 0.962073459400516,
+      "ci95_low": 0.9480560839544837,
+      "ci95_high": 0.9739323944924025,
+      "rank_2025": "ngoài top 49 (/110)",
+      "rank_range": "ngoài top 49 (/110) … ngoài top 49 (/110)"
+    }
+  ],
+  "n_dev": 3200,
+  "n_holdout": 800,
+  "split_fp": "d259780a48f0",
+  "config": {
+    "run_models": [
+      "tfidf",
+      "deberta-v3-base",
+      "deberta-v3-large",
+      "qwen2.5-3b",
+      "guard_wildguard"
+    ],
+    "seed": 42,
+    "n_folds": 5,
+    "n_holdout_splits": 5,
+    "evals_per_epoch": 4,
+    "train_probe_size": 320,
+    "ensemble_iters": 30,
+    "n_bootstrap": 2000,
+    "out_dir": "/kaggle/working/clf"
+  },
+  "model_configs": {
+    "tfidf": {
+      "kind": "tfidf",
+      "C_grid": [
+        4.0,
+        16.0,
+        64.0
+      ]
+    },
+    "deberta-v3-base": {
+      "kind": "encoder",
+      "name": "microsoft/deberta-v3-base",
+      "max_len": 512,
+      "head_len": 384,
+      "lr": 2e-05,
+      "epochs": 3,
+      "batch_size": 8,
+      "grad_accum": 2
+    },
+    "deberta-v3-large": {
+      "kind": "encoder",
+      "name": "microsoft/deberta-v3-large",
+      "max_len": 512,
+      "head_len": 384,
+      "lr": 1e-05,
+      "epochs": 3,
+      "batch_size": 4,
+      "grad_accum": 4
+    },
+    "qwen2.5-3b": {
+      "kind": "llm",
+      "name": "Qwen/Qwen2.5-3B-Instruct",
+      "max_len": 512,
+      "head_len": 384,
+      "lr": 0.0001,
+      "epochs": 1,
+      "batch_size": 4,
+      "grad_accum": 4,
+      "lora_r": 16,
+      "lora_alpha": 32,
+      "lora_dropout": 0.05
+    },
+    "guard_wildguard": {
+      "kind": "guard",
+      "name": "allenai/wildguard",
+      "max_prompt_tokens": 1024,
+      "batch_size": 8
+    }
+  }
+}
