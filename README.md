@@ -1,4 +1,4 @@
-# Fine-tuning-Training
+# LLM Safety Fine-tuning
 
 A reproducible, notebook-based pipeline for **parameter-efficient supervised fine-tuning (SFT)** of small instruction-tuned LLMs on a single free GPU (Kaggle Tesla T4, 16 GB), with built-in **training-health diagnostics** and **multi-run benchmarking**.
 
