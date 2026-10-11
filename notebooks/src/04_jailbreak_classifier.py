@@ -1,17 +1,24 @@
 # %% [markdown]
 # # 04 — Phân loại jailbreak (RMIT Hackathon 2025, Challenge 1+2) và tự chấm điểm
 #
-# Một notebook chạy hết, khoảng **8 giờ** trên **GPU T4 x2** (giới hạn Kaggle là 12 giờ):
+# **v3.** Một notebook, **GPU T4 x2**, chạy theo thứ tự ưu tiên trong `CONFIG["run_models"]`:
 #
-# | Mô hình | Cách làm | Thời gian ước tính |
-# |---|---|---|
-# | `tfidf` | TF-IDF từ + ký tự → Logistic Regression | ~3 phút |
-# | `deberta-v3-base` | fine-tune toàn bộ, chạy trên 2 GPU | ~45 phút |
-# | `deberta-v3-large` | fine-tune toàn bộ, chạy trên 2 GPU | ~2.5 giờ |
-# | `qwen2.5-3b` | Qwen2.5-3B-Instruct 4-bit + LoRA, đầu phân loại (1 GPU) | ~3.5 giờ |
-# | `guard_wildguard` | WildGuard 7B chấm zero-shot, không train (1 GPU) | ~40 phút |
+# | Mô hình | Cách làm | Thời gian ước tính | v3 so với v2 |
+# |---|---|---|---|
+# | `tfidf` | TF-IDF từ + ký tự → Logistic Regression | ~2 phút | giữ nguyên → nạp lại từ v2 |
+# | `deberta-v3-base` | fine-tune toàn bộ, 2 GPU | ~75 phút | giữ nguyên → nạp lại từ v2 |
+# | `qwen2.5-3b` | Qwen2.5-3B-Instruct 4-bit + LoRA, đầu phân loại, 1 GPU | ~6.3 giờ | **2 epoch** (v2: 1) |
+# | `guard_wildguard` | WildGuard 7B chấm zero-shot, 1 GPU | ~40 phút | cần `HF_TOKEN` |
+# | `deberta-v3-large` | fine-tune toàn bộ, 2 GPU | ~4 giờ | **batch 2×8 + gradient checkpointing** (v2 hết VRAM), 2 epoch |
 #
 # **Cài đặt Kaggle:** Accelerator = **GPU T4 x2** · Internet = **On** · Add Input → **Competitions → RMIT HACKATHON 2025**.
+#
+# **Dùng lại kết quả v2 (khuyên dùng):** Add Input → *Your Work → Notebooks* → chọn notebook này → **output của version v2**.
+# Mô hình nào trong Input có cùng config và cùng cách chia dữ liệu thì được nạp lại, không train lại (tiết kiệm ~1.3 giờ).
+# Qwen v2 (1 epoch) cũng được nạp thêm dưới tên `qwen2.5-3b@prev1` để gộp cùng Qwen v3.
+#
+# **Ngân sách thời gian:** `time_budget_hours = 11.3`. Trước mỗi mô hình và mỗi fold, notebook kiểm tra còn kịp không;
+# không kịp thì bỏ qua (ghi vào REPORT) để vẫn kết thúc và lưu output trước giới hạn 12 giờ của Kaggle.
 #
 # WildGuard là mô hình bị khóa (gated) trên Hugging Face nên cần token. **Không có token thì notebook tự bỏ qua WildGuard**, các mô hình khác vẫn chạy.
 # Muốn dùng: bấm đồng ý điều khoản tại https://huggingface.co/allenai/wildguard, rồi thêm Kaggle Secret tên **`HF_TOKEN`** (Add-ons → Secrets).
@@ -22,7 +29,7 @@
 # trọng số ensemble chỉ chọn trên OOF của dev; điểm cuối = **ROC-AUC holdout** + CI 95% bootstrap, tra hạng leaderboard 2025.
 # Báo 2 bản: `ensemble_clean` (chỉ mô hình train trên dữ liệu đề) và `ensemble_all` (thêm WildGuard, đã được train trên dữ liệu rất giống đề).
 #
-# **Output** (`/kaggle/working/clf/`): `REPORT.md`, `charts/*.png`, `models/<tên>/{preds.npz, history.csv, folds.csv, spec.json}`,
+# **Output** (`/kaggle/working/v3/`): `REPORT.md` (có thêm accuracy / precision / recall / F1), `charts/*.png`, `models/<tên>/{preds.npz, history.csv, folds.csv, spec.json}`,
 # `run_record.json`, `scores.json`, `leaderboard_compare.md`, `oof_predictions.csv`, `holdout_predictions.csv`, `holdout_errors.csv`, `submission*.csv`.
 
 # %%
@@ -677,13 +684,32 @@ def lb_rank(score):
     return f"#{rank}" if rank <= len(LEADERBOARD_2025) else f"ngoài top {len(LEADERBOARD_2025)} (/{N_TEAMS_2025})"
 
 
-rows = []
+def dev_threshold(y, s):
+    grid = np.unique(np.quantile(s, np.linspace(0, 1, 1001)))
+    acc = ((s[None, :] >= grid[:, None]) == y[None, :].astype(bool)).mean(axis=1)
+    return float(grid[acc.argmax()])
+
+
+def label_metrics(y, s, th):
+    pred = s >= th
+    tp, fp = int((pred & (y == 1)).sum()), int((pred & (y == 0)).sum())
+    fn, tn = int((~pred & (y == 1)).sum()), int((~pred & (y == 0)).sum())
+    precision = tp / max(tp + fp, 1)
+    recall = tp / max(tp + fn, 1)
+    return dict(threshold=th, accuracy=(tp + tn) / len(y), precision=precision, recall=recall,
+                f1=2 * precision * recall / max(precision + recall, 1e-9), tp=tp, fp=fp, fn=fn, tn=tn)
+
+
+rows, label_rows = [], []
 for name, r in ALL.items():
     auc = roc_auc_score(y_hold, r["holdout"])
     lo, hi = bootstrap_ci(y_hold, r["holdout"], CONFIG["n_bootstrap"], CONFIG["seed"])
     rows.append(dict(model=name, cv_auc=r["cv_auc"], holdout_auc=auc, ci95_low=lo, ci95_high=hi,
                      rank_2025=lb_rank(auc), rank_range=f"{lb_rank(hi)} … {lb_rank(lo)}"))
+    label_rows.append(dict(model=name, **label_metrics(y_hold, np.asarray(r["holdout"]), dev_threshold(y_dev, np.asarray(r["oof"])))))
 scores = pd.DataFrame(rows).sort_values("holdout_auc", ascending=False)
+label_scores = pd.DataFrame(label_rows).set_index("model").loc[scores.model].reset_index()
+display(label_scores.round(4))
 scores.round(5)
 
 # %%
@@ -709,6 +735,16 @@ results_table = [
 results_table += [f"| {r.model} | {r.cv_auc:.5f} | **{r.holdout_auc:.5f}** | {r.ci95_low:.5f}–{r.ci95_high:.5f} | {r.rank_2025} | {r.rank_range} |"
                   for r in scores.itertuples()]
 results_table += [""] + [f"Trọng số {n}: {json.dumps({k: round(v, 3) for k, v in w.items() if v > 0})}" for n, w in ENS_WEIGHTS.items()]
+results_table += [
+    "",
+    "**Accuracy / precision / recall / F1 trên holdout** (không phải thước đo của đề, chỉ để tham khảo). "
+    "Ngưỡng cắt chọn trên OOF của dev (tối đa accuracy), holdout không tham gia chọn ngưỡng.",
+    "",
+    "| Mô hình | Ngưỡng | Accuracy | Precision | Recall | F1 | Báo nhầm (FP) | Bỏ lọt (FN) |",
+    "|---|---|---|---|---|---|---|---|",
+    *[f"| {r.model} | {r.threshold:.3f} | {r.accuracy:.2%} | {r.precision:.2%} | {r.recall:.2%} | {r.f1:.4f} | {r.fp} | {r.fn} |"
+      for r in label_scores.itertuples()],
+]
 md = [
     "# So sánh với RMIT Hackathon 2025 (Challenge 1+2, ROC-AUC)\n",
     *[f"- {v}" for v in verdicts],
@@ -722,6 +758,7 @@ md = [
 primary = "ensemble_all" if "ensemble_all" in ENSEMBLES else "ensemble_clean"
 (OUT / "scores.json").write_text(json.dumps(dict(
     run_id=RUN_ID, verdict=verdicts, weights=ENS_WEIGHTS, models=scores.to_dict(orient="records"),
+    label_metrics=label_scores.to_dict(orient="records"),
     n_dev=int(len(dev_idx)), n_holdout=int(len(hold_idx)), split_fp=SPLIT_FP, config=CONFIG, model_configs=MODELS,
 ), ensure_ascii=False, indent=2, default=str), encoding="utf-8")
 print("\n".join(md))

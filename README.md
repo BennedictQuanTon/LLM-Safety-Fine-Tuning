@@ -30,14 +30,7 @@ flowchart LR
 | Behavioural evaluation | `03_eval_compare` | 1× T4 | 40–70 min | `eval_report.md`, `eval_chart.png`, `perplexity_chart.png`, `eval_record.json` |
 | Run benchmarking | `05_compare_runs` | CPU | < 1 min | `runs_comparison.md/.csv`, comparison charts |
 
-`04_jailbreak_classifier` is an independent track: a prompt-safety classifier scored by ROC-AUC on a locked hold-out set. It is not part of the fine-tuning pipeline above. A single run (about 8 hours on 2× T4) trains and ensembles:
-
-- TF-IDF + logistic regression;
-- DeBERTa-v3-base and DeBERTa-v3-large;
-- Qwen2.5-3B-Instruct with a QLoRA sequence-classification head;
-- zero-shot scores from a pretrained safety model (WildGuard). This step is optional: it is skipped when no `HF_TOKEN` secret is set, because the model is gated.
-
-Each model saves its out-of-fold, hold-out and test predictions plus its training history under `models/<name>/`. A model that fails is logged and skipped. The run builds two rank-average ensembles, one with and one without the pretrained safety model, and writes `REPORT.md` with charts. Prediction files from earlier runs that are attached as inputs are reused, as long as they share the same split fingerprint. `tools/report_from_results.py` rebuilds a stdlib-only SVG report from a downloaded v1 output folder.
+`04_jailbreak_classifier` is an independent track: a prompt-safety classifier (benign vs. jailbreak / prompt injection) scored by ROC-AUC on a locked hold-out set. It is not part of the fine-tuning pipeline above. See [Prompt-safety classifier](#prompt-safety-classifier-notebook-04) below.
 
 ---
 
@@ -177,6 +170,67 @@ The default pipeline uses roughly 3–5 GPU hours of the 30 h weekly quota.
 **Resuming:** checkpoints are saved every 40 steps under `outputs/`. Attach the interrupted run's output as an input and set `CONFIG["resume_from_checkpoint"]`.
 
 ---
+
+## Prompt-safety classifier (notebook 04)
+
+A binary classifier that gives every prompt a jailbreak score. Its quality is measured by **ROC-AUC**, the probability that a random jailbreak prompt is scored above a random benign one. Accuracy, precision, recall and F1 are reported as well, at a threshold chosen on the development data.
+
+### Evaluation protocol
+
+- The labelled set has 4,000 prompts. A **20% hold-out (800 prompts)** is locked away and never used for model or weight selection.
+- The remaining 3,200 dev prompts are split with **5-fold `StratifiedGroupKFold`** (seed 42). Folds keep the label ratio, and duplicate prompts always land on the same side.
+- Every model produces **out-of-fold (OOF)** predictions on dev. Ensemble weights are chosen on the OOF predictions only.
+- The final score is the hold-out ROC-AUC with a 95% bootstrap confidence interval (2,000 resamples). A split fingerprint (`SPLIT_FP`) guarantees that predictions from different runs are aligned before they are combined.
+
+### Models
+
+| Model | Training method | Key settings |
+|---|---|---|
+| TF-IDF + logistic regression | classical | word 1–2-grams + char 2–5-grams; C ∈ {4, 16, 64} chosen by CV |
+| DeBERTa-v3-base | full fine-tune, FP16 AMP, 2 GPUs | 512 tokens (head 384 + tail 128), lr 2e-5, 3 epochs, effective batch 32 |
+| DeBERTa-v3-large | full fine-tune, FP16 AMP, gradient checkpointing, 2 GPUs | 512 tokens, lr 1e-5, 2 epochs, batch 2 × accumulation 8 per GPU |
+| Qwen2.5-3B-Instruct | QLoRA (4-bit NF4, LoRA r = 16, α = 32 on all linear layers) + classification head | 512 tokens, lr 1e-4, paged AdamW 8-bit, effective batch 16 |
+| WildGuard 7B (optional) | zero-shot, no training | score = logit("yes") − logit("no") after `Harmful request:`; needs an `HF_TOKEN` secret |
+
+The models are combined by **rank averaging**, with weights found by greedy hill-climbing on the OOF predictions. The run reports two ensembles: `ensemble_clean` uses only models trained on the task data, and `ensemble_all` also includes the pretrained safety model. The safety model was trained on data close to this task, so its contribution is kept separate.
+
+### Training telemetry
+
+- Every transformer is evaluated 4 times per epoch, on both the validation fold and a fixed 320-prompt training probe. Train loss and eval loss are therefore computed the same way and can be compared directly.
+- Per fold, the run records AUC, wall-clock minutes and peak VRAM.
+- Charts: `training_curves.png` (train vs. eval loss and AUC per epoch), `loss_over_time.png` (loss against wall-clock minutes across folds), `compare_models_curves.png`, `fold_summary.png`, ROC, AUC by prompt length, and score histograms.
+- `REPORT.md` adds an automatic diagnosis per model: unstable folds, NaN loss, overfitting (eval loss rising again) and underfitting.
+
+### Results
+
+Hold-out ROC-AUC on 800 prompts:
+
+| Model | v1 | v2 |
+|---|---|---|
+| TF-IDF + LR | 0.9621 | 0.9621 |
+| DeBERTa-v3-base | 0.9833 | 0.9836 |
+| Qwen2.5-3B QLoRA (1 epoch) | — | 0.9904 |
+| DeBERTa-v3-large | — | failed (out of memory) |
+| **Ensemble** | **0.9848** | **0.9910** (95% CI 0.985–0.996) |
+
+At a threshold chosen on dev, the v2 ensemble reaches **95.75% accuracy** on the hold-out set (precision 92.1%, recall 97.0%; 25 false positives and 9 false negatives out of 800).
+
+Findings from the telemetry:
+- Most remaining errors are **long role-play prompts** (60+ words), where the label depends on intent rather than keywords. Qwen raised AUC on these from about 0.970 to about 0.983.
+- **DeBERTa-base overfits after about 2 epochs**: eval loss bottoms out and then rises while train loss keeps falling.
+- **Qwen was still improving at the end of epoch 1**, with a small train–eval gap.
+- The loss logged during training is inflated by the gradient-accumulation factor under transformers 5. The re-measured probe loss is the reliable curve.
+
+### v3 changes
+
+| Change | Reason |
+|---|---|
+| Qwen2.5-3B trained for 2 epochs; the 1-epoch v2 model is kept as an extra ensemble member (`@prev1`) | validation AUC was still rising at the end of epoch 1 |
+| DeBERTa-v3-large: batch 2 × accumulation 8, gradient checkpointing, `expandable_segments`, 2 epochs | v2 ran out of memory on GPU 0; the base model shows that 2 epochs are enough |
+| Unchanged models are reused from the previous run's outputs (same config and split fingerprint) | saves about 1.3 GPU-hours |
+| Time budget (11.3 h) checked before every model and every fold | the run always finishes and saves outputs inside Kaggle's 12-hour limit |
+| One-line failure messages in the report; outputs written to `/kaggle/working/<version>/` | readable reports; no overwriting of earlier results |
+| Accuracy / precision / recall / F1 with a dev-chosen threshold | answers "how often is it right" alongside ROC-AUC |
 
 ## Repository layout
 
