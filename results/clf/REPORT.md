@@ -1,102 +1,7 @@
 # Báo cáo lần chạy `clf_20261011-060132`
 
 - `ensemble_clean`: CHƯA đạt top 3: thiếu 0.00556 so với mốc 0.99658. Hạng tương đương **#28** (CI 95%: #7 … #41)
-- ⚠️ `deberta-v3-large` không có trong kết quả: OutOfMemoryError: Caught OutOfMemoryError in replica 0 on device 0.
-Original Traceback (most recent call last):
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/parallel/parallel_apply.py", line 114, in _worker
-    output = module(*input, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py", line 1057, in forward
-    outputs = self.deberta(
-        input_ids,
-    ...<6 lines>...
-        return_dict=return_dict,
-    )
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py", line 763, in forward
-    encoder_outputs = self.encoder(
-        embedding_output,
-    ...<3 lines>...
-        return_dict=return_dict,
-    )
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py", line 651, in forward
-    output_states, attn_weights = layer_module(
-                                  ~~~~~~~~~~~~^
-        next_kv,
-        ^^^^^^^^
-    ...<4 lines>...
-        output_attentions=output_attentions,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
-    return super().__call__(*args, **kwargs)
-           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py", line 432, in forward
-    attention_output, att_matrix = self.attention(
-                                   ~~~~~~~~~~~~~~^
-        hidden_states,
-        ^^^^^^^^^^^^^^
-    ...<4 lines>...
-        rel_embeddings=rel_embeddings,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py", line 365, in forward
-    self_output, att_matrix = self.self(
-                              ~~~~~~~~~^
-        hidden_states,
-        ^^^^^^^^^^^^^^
-    ...<4 lines>...
-        rel_embeddings=rel_embeddings,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py", line 246, in forward
-    rel_att = self.disentangled_attention_bias(
-        query_layer, key_layer, relative_pos, rel_embeddings, scale_factor
-    )
-  File "/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py", line 338, in disentangled_attention_bias
-    p2c_att = torch.gather(
-              ~~~~~~~~~~~~^
-        p2c_att,
-        ^^^^^^^^
-        dim=-1,
-        ^^^^^^^
-        index=p2c_pos.squeeze(0).expand([query_layer.size(0), key_layer.size(-2), key_layer.size(-2)]),
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ).transpose(-1, -2)
-    ^
-torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 64.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 10.81 MiB is free. Including non-PyTorch memory, this process has 14.55 GiB memory in use. Of the allocated memory 14.22 GiB is allocated by PyTorch, and 128.38 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
-
+- ⚠️ `deberta-v3-large` không có trong kết quả: CUDA out of memory trên GPU 0 (14.55/14.56 GiB). Đã sửa ở v3: batch 2 × gom 8 lượt, gradient checkpointing, `expandable_segments`.
 - ⚠️ `guard_wildguard` không có trong kết quả: bỏ qua: không có HF_TOKEN (mô hình gated)
 
 ## 1. Specs
@@ -143,6 +48,101 @@ Trọng số ensemble_clean: {"tfidf": 0.2, "deberta-v3-base": 0.4, "qwen2.5-3b"
 ![](charts/compare_models_curves.png)
 
 ![](charts/fold_summary.png)
+
+### 3.1 Đọc biểu đồ và chẩn đoán (quy trình của AI engineer)
+
+Kỹ sư đọc biểu đồ train theo đúng thứ tự dưới đây. Mỗi bước trả lời **một câu hỏi** và kết thúc bằng **một hành động** cụ thể.
+
+#### Bước 0: Biết mỗi đường đo cái gì
+
+| Đường | Đo trên | Tin được không | Ghi chú |
+|---|---|---|---|
+| **Xám**: train loss lúc train | batch đang train | ❌ chỉ xem xu hướng | Rung mạnh vì mỗi batch một khác. Trong transformers 5.x con số còn bị **nhân theo grad_accum** (DeBERTa ×2, Qwen ×4), nên xám nằm cao hơn hẳn xanh/cam. **Đừng so xám với cam.** |
+| **Xanh**: train loss đo lại | 320 mẫu train cố định | ✅ | Cùng cách đo với cam nên so trực tiếp được: "mô hình thuộc bài đến đâu". |
+| **Cam**: eval loss | fold validation (chưa từng thấy) | ✅ quan trọng nhất | "Làm bài mới tốt đến đâu". |
+| **AUC** (biểu đồ phải) | như trên | ✅ | Đây là **thước đo cuộc thi**. Loss đo độ tự tin, AUC đo thứ tự xếp hạng. Hai thứ này có thể đi khác nhau. |
+
+Mốc tham chiếu: loss của việc đoán bừa 50/50 là ln 2 ≈ **0.69**. Dưới 0.69 nghĩa là mô hình đã học được gì đó.
+
+#### Bước 1: Mô hình có học không? (underfit)
+
+Câu hỏi: cả xanh và cam có giảm rõ không?
+
+- **DeBERTa:** cam giảm từ 1.31 xuống 0.36. Lúc đầu cao hơn 0.69 là bình thường vì đầu phân loại mới khởi tạo ngẫu nhiên, đoán sai mà còn tự tin. Đến epoch 1 đã xuống 0.53. → **Có học.**
+- **Qwen:** cam ngay ở 0.25 epoch đã là 0.44, sau 1 epoch còn 0.19. Qwen bắt đầu tốt hơn nhiều vì đã đọc rất nhiều văn bản lúc pre-train, LoRA chỉ cần "chỉnh hướng". → **Có học, và học nhanh.**
+
+#### Bước 2: Đã học hết chưa, hay dừng sớm quá?
+
+Câu hỏi: ở cuối quá trình, đường cam và AUC validation còn đi lên/xuống hay đã nằm ngang?
+
+| Mô hình | Cam ở 3 điểm cuối | AUC validation ở 3 điểm cuối | Kết luận |
+|---|---|---|---|
+| DeBERTa | 0.363 → 0.406 → 0.414 | 0.9847 → 0.9847 → 0.9846 | **Đã bão hòa.** Thêm epoch không lợi. |
+| Qwen | 0.307 → 0.220 → 0.194 | 0.9709 → 0.9789 → 0.9820 | **Vẫn đang đi xuống/lên** → train **chưa đủ**. |
+
+→ **Hành động:** v3 cho Qwen chạy **2 epoch**. Đây là bằng chứng chính cho thay đổi lớn nhất của v3.
+
+#### Bước 3: Có overfit không?
+
+Câu hỏi: có lúc nào **cam đi lên trong khi xanh vẫn đi xuống** không?
+
+- **DeBERTa:** cam chạm đáy **0.363 ở epoch 2.5**, rồi tăng lên 0.414 ở epoch 3 (+14%). Trong khi đó xanh đứng yên ở khoảng 0.14. → **Overfit nhẹ ở nửa cuối epoch 3.** Notebook tự đánh dấu điều này trong cột "Chẩn đoán".
+  - Nhưng nhìn AUC thì **không đổi** (0.9847). Tức là mô hình chỉ **tự tin thái quá** với vài mẫu sai (loss tăng), **thứ tự xếp hạng vẫn giữ nguyên**. Cuộc thi chấm AUC nên overfit kiểu này **gần như vô hại**.
+  - → **Hành động:** 2.5 epoch là đủ. Nếu thiếu thời gian có thể cắt còn 2 epoch, gần như không mất gì.
+- **Qwen:** cam giảm đều đến cuối, không có dấu hiệu overfit.
+
+**Một cái bẫy dễ đọc nhầm:** đường cam của DeBERTa có hai cái "gợn" ở epoch 1.5 (0.496) và 2.0 (0.451). Tại đúng hai điểm đó, **xanh cũng gợn theo** (0.344, 0.260). Khi cả hai cùng gợn thì đó là **nhiễu tối ưu** (một vài bước cập nhật hơi mạnh), **không phải overfit**. Overfit chỉ khi cam tăng mà xanh **không** tăng.
+
+#### Bước 4: Khoảng cách giữa train và validation (generalization gap)
+
+| Mô hình | Loss: cam − xanh (cuối) | AUC: train − val (cuối) | Đọc |
+|---|---|---|---|
+| DeBERTa | 0.414 − 0.147 = **0.267** | 0.9963 − 0.9846 = 0.012 | Thuộc bài train hơn hẳn bài mới, đã "học vẹt" một phần |
+| Qwen | 0.194 − 0.106 = **0.088** | 0.9937 − 0.9820 = 0.012 | Gap nhỏ, tổng quát hóa tốt |
+
+Khoảng cách loss của Qwen nhỏ gấp 3 lần DeBERTa. Lý do là LoRA chỉ sửa một phần rất nhỏ trọng số, khó học vẹt, trong khi DeBERTa sửa **toàn bộ** trọng số. Đây cũng là lý do Qwen có holdout AUC cao nhất (0.9904).
+
+Lưu ý: holdout AUC (0.9904) **cao hơn** CV AUC (0.9817) là bình thường. Điểm holdout là **trung bình của 5 mô hình fold**, tức đã là một ensemble nhỏ, còn điểm CV mỗi mẫu chỉ do 1 mô hình chấm.
+
+#### Bước 5: Các fold có ổn định không? (xem `fold_summary.png`)
+
+| Mô hình | AUC từng fold (0 → 4) | Biên độ |
+|---|---|---|
+| DeBERTa | 0.9874 · 0.9841 · 0.9856 · **0.9795** · 0.9866 | 0.008 |
+| Qwen | 0.9871 · **0.9776** · 0.9861 · **0.9761** · 0.9831 | 0.011 |
+
+Fold 3 là fold thấp nhất **ở cả hai mô hình**. Khi hai mô hình khác hẳn nhau cùng yếu ở một fold, nguyên nhân thường nằm ở **dữ liệu của fold đó** (nhiều mẫu khó hơn), chứ không phải do mô hình train lỗi. → Không cần sửa gì. Đây cũng là lý do phải dùng 5 fold thay vì tin 1 lần chia.
+
+#### Bước 6: Thời gian và bộ nhớ (xem `loss_over_time.png` và bảng mục 3)
+
+| Mô hình | Phút/fold | VRAM đỉnh | Nhận xét |
+|---|---|---|---|
+| DeBERTa-base | khoảng 15, rất đều | 11.4 GB / 15 GB | Gần chạm trần. Bản **large** gấp khoảng 3 lần tham số → **OOM ở v2** là dễ đoán. → v3: batch 2, gradient checkpointing. |
+| Qwen 3B (4-bit) | khoảng 42, rất đều | 6.1–9.9 GB | Chênh nhau theo fold vì fold nào có prompt dài nhất thì tốn nhất. Còn dư bộ nhớ. |
+
+Thời gian mỗi fold đều nhau → không có fold nào bị treo hay chậm bất thường. Ở fold 4 của Qwen, đường xám vọt lên khoảng 1.3 ở cuối: đó là **một batch khó**, cam vẫn bình thường → bỏ qua.
+
+#### Tổng kết chẩn đoán
+
+| Mô hình | Trạng thái | Bằng chứng | Hành động cho v3 |
+|---|---|---|---|
+| DeBERTa-v3-base | Đã bão hòa, overfit nhẹ (chỉ ở loss) | cam đáy ở epoch 2.5 rồi tăng 14%, AUC phẳng | Giữ nguyên, tái sử dụng kết quả v2 |
+| Qwen2.5-3B | **Chưa học đủ** | cam và AUC còn cải thiện ở điểm cuối, gap nhỏ | **Tăng lên 2 epoch** |
+| DeBERTa-v3-large | Không chạy được (OOM) | base đã dùng 11.4/15 GB | batch 2 × accum 8 + gradient checkpointing |
+
+#### Bảng tra nhanh cho lần sau
+
+| Bạn thấy | Nghĩa là | Làm gì |
+|---|---|---|
+| Xanh và cam cùng cao, giảm chậm | Underfit | Tăng lr, thêm epoch, mô hình to hơn |
+| Cả hai còn đang giảm ở điểm cuối | Train chưa đủ | Thêm epoch |
+| Cả hai nằm ngang | Bão hòa | Dừng. Muốn tăng điểm thì đổi mô hình/dữ liệu/ensemble |
+| Cam tăng, xanh vẫn giảm | Overfit | Ít epoch hơn, lr thấp hơn, thêm dropout/dữ liệu |
+| Cam tăng nhưng AUC đứng yên | Quá tự tin, xếp hạng vẫn đúng | Với cuộc thi chấm AUC: thường bỏ qua được |
+| Cam và xanh cùng gợn một lúc | Nhiễu tối ưu | Bỏ qua, hoặc giảm lr nếu gợn quá mạnh |
+| Một fold thấp ở mọi mô hình | Fold đó khó (do dữ liệu) | Bình thường, không sửa |
+| Một fold thấp ở một mô hình duy nhất | Lần train đó lỗi/không ổn định | Xem log fold đó, đổi seed |
+| VRAM gần 15 GB | Sắp OOM | Giảm batch, bật gradient checkpointing, giảm max_len |
 
 ## 4. ROC, độ dài prompt, phân bố điểm
 

@@ -500,7 +500,8 @@ def guard_scores(model, tokenizer, texts, cfg, yes_id, no_id):
     for start in range(0, len(order), cfg["batch_size"]):
         idx = order[start:start + cfg["batch_size"]]
         enc = tokenizer([prompts[i] for i in idx], add_special_tokens=False, padding=True, return_tensors="pt").to(model.device)
-        logits = model(**enc).logits[:, -1, :].float()
+        position_ids = (enc["attention_mask"].long().cumsum(-1) - 1).clamp(min=0)
+        logits = model(**enc, position_ids=position_ids).logits[:, -1, :].float()
         scores[idx] = (logits[:, yes_id] - logits[:, no_id]).cpu().numpy()
         if start // cfg["batch_size"] % 50 == 0:
             print(f"  {start}/{len(order)}")

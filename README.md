@@ -189,7 +189,7 @@ A binary classifier that gives every prompt a jailbreak score. Its quality is me
 | TF-IDF + logistic regression | classical | word 1–2-grams + char 2–5-grams; C ∈ {4, 16, 64} chosen by CV |
 | DeBERTa-v3-base | full fine-tune, FP16 AMP, 2 GPUs | 512 tokens (head 384 + tail 128), lr 2e-5, 3 epochs, effective batch 32 |
 | DeBERTa-v3-large | full fine-tune, FP16 AMP, gradient checkpointing, 2 GPUs | 512 tokens, lr 1e-5, 2 epochs, batch 2 × accumulation 8 per GPU |
-| Qwen2.5-3B-Instruct | QLoRA (4-bit NF4, LoRA r = 16, α = 32 on all linear layers) + classification head | 512 tokens, lr 1e-4, paged AdamW 8-bit, effective batch 16 |
+| Qwen2.5-3B-Instruct | QLoRA (4-bit NF4, LoRA r = 16, α = 32 on all linear layers) + classification head | 512 tokens, lr 1e-4, paged AdamW 8-bit, effective batch 16, 1 epoch (v2) / 2 epochs (v3), 1 GPU |
 | WildGuard 7B (optional) | zero-shot, no training | score = logit("yes") − logit("no") after `Harmful request:`; needs an `HF_TOKEN` secret |
 
 The models are combined by **rank averaging**, with weights found by greedy hill-climbing on the OOF predictions. The run reports two ensembles: `ensemble_clean` uses only models trained on the task data, and `ensemble_all` also includes the pretrained safety model. The safety model was trained on data close to this task, so its contribution is kept separate.
@@ -201,9 +201,22 @@ The models are combined by **rank averaging**, with weights found by greedy hill
 - Charts: `training_curves.png` (train vs. eval loss and AUC per epoch), `loss_over_time.png` (loss against wall-clock minutes across folds), `compare_models_curves.png`, `fold_summary.png`, ROC, AUC by prompt length, and score histograms.
 - `REPORT.md` adds an automatic diagnosis per model: unstable folds, NaN loss, overfitting (eval loss rising again) and underfitting.
 
-### Results
+### Results: v1 vs. v2
 
-Hold-out ROC-AUC on 800 prompts:
+The classifier was benchmarked against the final private leaderboard of a public prompt-injection detection competition (110 teams, ROC-AUC). No submission was made; the "equivalent rank" places the hold-out AUC on that leaderboard.
+
+| | **v1** | **v2** |
+|---|---|---|
+| Models in the ensemble | TF-IDF + LR, DeBERTa-v3-base | TF-IDF + LR, DeBERTa-v3-base, **Qwen2.5-3B QLoRA** |
+| Ensemble weights (hill-climbing on OOF) | TF-IDF 1/3 · DeBERTa 2/3 | TF-IDF 0.2 · DeBERTa 0.4 · Qwen 0.4 |
+| Hardware | Kaggle 2× T4 | Kaggle 2× T4 |
+| Training time (5 folds) | ~1.3 h | ~4.8 h (Qwen 3.5 h, DeBERTa 1.2 h) |
+| CV AUC (dev OOF) | 0.9836 | 0.9898 |
+| **Hold-out ROC-AUC** | **0.9848** | **0.9910** (95% CI 0.985–0.996) |
+| Equivalent leaderboard rank | #41 / 110 | **#28 / 110** (95% CI #7–#41) |
+| Hold-out accuracy (dev-chosen threshold) | — | 95.75% (precision 92.1%, recall 97.0%) |
+
+Hold-out ROC-AUC per model (800 prompts):
 
 | Model | v1 | v2 |
 |---|---|---|
@@ -211,9 +224,20 @@ Hold-out ROC-AUC on 800 prompts:
 | DeBERTa-v3-base | 0.9833 | 0.9836 |
 | Qwen2.5-3B QLoRA (1 epoch) | — | 0.9904 |
 | DeBERTa-v3-large | — | failed (out of memory) |
-| **Ensemble** | **0.9848** | **0.9910** (95% CI 0.985–0.996) |
+| **Ensemble** | **0.9848** | **0.9910** |
 
-At a threshold chosen on dev, the v2 ensemble reaches **95.75% accuracy** on the hold-out set (precision 92.1%, recall 97.0%; 25 false positives and 9 false negatives out of 800).
+The gain from v1 to v2 comes almost entirely from **Qwen2.5-3B as a classifier**: on its own it already beats the v1 ensemble, and it is strongest on long role-play prompts where keyword models fail.
+
+<p align="center">
+  <img src="results/clf/charts/leaderboard_position.png" width="49%" alt="Hold-out AUC placed on the competition leaderboard">
+  <img src="results/clf/charts/holdout_auc_ci.png" width="49%" alt="Hold-out AUC with 95% bootstrap confidence intervals">
+</p>
+
+<p align="center">
+  <img src="results/clf/charts/training_curves.png" width="90%" alt="Train vs. eval loss and AUC per epoch for DeBERTa-v3-base and Qwen2.5-3B">
+</p>
+
+The full v2 report, with per-fold statistics, AUC by prompt length, ROC curves, score distributions and the hardest hold-out errors, is in [`results/clf/REPORT.md`](results/clf/REPORT.md).
 
 Findings from the telemetry:
 - Most remaining errors are **long role-play prompts** (60+ words), where the label depends on intent rather than keywords. Qwen raised AUC on these from about 0.970 to about 0.983.
