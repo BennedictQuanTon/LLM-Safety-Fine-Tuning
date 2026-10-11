@@ -1,0 +1,221 @@
+{
+  "run_id": "v3_20261011-113536",
+  "verdict": [
+    "`ensemble_clean`: CHƯA đạt top 3: thiếu 0.00177 so với mốc 0.99658. Hạng tương đương **#10** (CI 95%: #2 … #29)",
+    "`ensemble_all`: ĐẠT top 3 (holdout AUC 0.99748 ≥ 0.99658). Hạng tương đương **#2** (CI 95%: #1 … #11)"
+  ],
+  "weights": {
+    "ensemble_clean": {
+      "tfidf": 0.0,
+      "deberta-v3-base": 0.3333333333333333,
+      "qwen2.5-3b": 0.6666666666666666
+    },
+    "ensemble_all": {
+      "tfidf": 0.2,
+      "deberta-v3-base": 0.0,
+      "qwen2.5-3b": 0.4,
+      "guard_wildguard": 0.4
+    }
+  },
+  "models": [
+    {
+      "model": "ensemble_all",
+      "cv_auc": 0.9970227182580279,
+      "holdout_auc": 0.9974799861698449,
+      "ci95_low": 0.9942946006833009,
+      "ci95_high": 0.9994226235320359,
+      "rank_2025": "#2",
+      "rank_range": "#1 … #11"
+    },
+    {
+      "model": "qwen2.5-3b",
+      "cv_auc": 0.9907296477460618,
+      "holdout_auc": 0.9955849889624724,
+      "ci95_low": 0.9924228974714873,
+      "ci95_high": 0.9979416211408823,
+      "rank_2025": "#10",
+      "rank_range": "#2 … #21"
+    },
+    {
+      "model": "ensemble_clean",
+      "cv_auc": 0.9925775598403851,
+      "holdout_auc": 0.9948070427404985,
+      "ci95_low": 0.9908716963473646,
+      "ci95_high": 0.9977268128386814,
+      "rank_2025": "#10",
+      "rank_range": "#2 … #29"
+    },
+    {
+      "model": "guard_wildguard",
+      "cv_auc": 0.9740095073679469,
+      "holdout_auc": 0.9856578632410438,
+      "ci95_low": 0.9793165718120308,
+      "ci95_high": 0.9908196913611289,
+      "rank_2025": "#39",
+      "rank_range": "#29 … ngoài top 49 (/110)"
+    },
+    {
+      "model": "deberta-v3-base",
+      "cv_auc": 0.9834528608199284,
+      "holdout_auc": 0.9836431819995213,
+      "ci95_low": 0.9749254215367398,
+      "ci95_high": 0.9909941198951319,
+      "rank_2025": "#43",
+      "rank_range": "#28 … ngoài top 49 (/110)"
+    },
+    {
+      "model": "tfidf",
+      "cv_auc": 0.9604973845217002,
+      "holdout_auc": 0.962073459400516,
+      "ci95_low": 0.9480560839544837,
+      "ci95_high": 0.9739323944924025,
+      "rank_2025": "ngoài top 49 (/110)",
+      "rank_range": "ngoài top 49 (/110) … ngoài top 49 (/110)"
+    }
+  ],
+  "label_metrics": [
+    {
+      "model": "ensemble_all",
+      "threshold": 0.582894654579556,
+      "accuracy": 0.97625,
+      "precision": 0.954983922829582,
+      "recall": 0.9834437086092715,
+      "f1": 0.9690048939641109,
+      "tp": 297,
+      "fp": 14,
+      "fn": 5,
+      "tn": 484
+    },
+    {
+      "model": "qwen2.5-3b",
+      "threshold": 0.3621802790164949,
+      "accuracy": 0.965,
+      "precision": 0.9391025641025641,
+      "recall": 0.9701986754966887,
+      "f1": 0.9543973941368078,
+      "tp": 293,
+      "fp": 19,
+      "fn": 9,
+      "tn": 479
+    },
+    {
+      "model": "ensemble_clean",
+      "threshold": 0.5885396478066063,
+      "accuracy": 0.96375,
+      "precision": 0.9305993690851735,
+      "recall": 0.9768211920529801,
+      "f1": 0.9531502423263327,
+      "tp": 295,
+      "fp": 22,
+      "fn": 7,
+      "tn": 476
+    },
+    {
+      "model": "guard_wildguard",
+      "threshold": -1.9920546875000014,
+      "accuracy": 0.93625,
+      "precision": 0.8909657320872274,
+      "recall": 0.9470198675496688,
+      "f1": 0.9181380417335472,
+      "tp": 286,
+      "fp": 35,
+      "fn": 16,
+      "tn": 463
+    },
+    {
+      "model": "deberta-v3-base",
+      "threshold": 0.06131596837192773,
+      "accuracy": 0.93375,
+      "precision": 0.878419452887538,
+      "recall": 0.956953642384106,
+      "f1": 0.9160063391442155,
+      "tp": 289,
+      "fp": 40,
+      "fn": 13,
+      "tn": 458
+    },
+    {
+      "model": "tfidf",
+      "threshold": 0.5704968867353721,
+      "accuracy": 0.905,
+      "precision": 0.8668831168831169,
+      "recall": 0.8841059602649006,
+      "f1": 0.8754098360655739,
+      "tp": 267,
+      "fp": 41,
+      "fn": 35,
+      "tn": 457
+    }
+  ],
+  "n_dev": 3200,
+  "n_holdout": 800,
+  "split_fp": "d259780a48f0",
+  "config": {
+    "version": "v3",
+    "run_models": [
+      "tfidf",
+      "deberta-v3-base",
+      "qwen2.5-3b",
+      "guard_wildguard",
+      "deberta-v3-large"
+    ],
+    "time_budget_hours": 11.3,
+    "seed": 42,
+    "n_folds": 5,
+    "n_holdout_splits": 5,
+    "evals_per_epoch": 4,
+    "train_probe_size": 320,
+    "ensemble_iters": 30,
+    "n_bootstrap": 2000
+  },
+  "model_configs": {
+    "tfidf": {
+      "kind": "tfidf",
+      "C_grid": [
+        4.0,
+        16.0,
+        64.0
+      ]
+    },
+    "deberta-v3-base": {
+      "kind": "encoder",
+      "name": "microsoft/deberta-v3-base",
+      "max_len": 512,
+      "head_len": 384,
+      "lr": 2e-05,
+      "epochs": 3,
+      "batch_size": 8,
+      "grad_accum": 2
+    },
+    "deberta-v3-large": {
+      "kind": "encoder",
+      "name": "microsoft/deberta-v3-large",
+      "max_len": 512,
+      "head_len": 384,
+      "lr": 1e-05,
+      "epochs": 2,
+      "batch_size": 2,
+      "grad_accum": 8,
+      "grad_ckpt": true
+    },
+    "qwen2.5-3b": {
+      "kind": "llm",
+      "name": "Qwen/Qwen2.5-3B-Instruct",
+      "max_len": 512,
+      "head_len": 384,
+      "lr": 0.0001,
+      "epochs": 2,
+      "batch_size": 4,
+      "grad_accum": 4,
+      "lora_r": 16,
+      "lora_alpha": 32,
+      "lora_dropout": 0.05
+    },
+    "guard_wildguard": {
+      "kind": "guard",
+      "name": "allenai/wildguard",
+      "max_prompt_tokens": 1024,
+      "batch_size": 8
+    }
+  }
+}
