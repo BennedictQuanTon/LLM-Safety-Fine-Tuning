@@ -30,7 +30,14 @@ flowchart LR
 | Behavioural evaluation | `03_eval_compare` | 1× T4 | 40–70 min | `eval_report.md`, `eval_chart.png`, `perplexity_chart.png`, `eval_record.json` |
 | Run benchmarking | `05_compare_runs` | CPU | < 1 min | `runs_comparison.md/.csv`, comparison charts |
 
-`04_jailbreak_classifier` is an independent track: a prompt-safety classifier (TF-IDF + DeBERTa-v3 ensemble, ROC-AUC with a locked hold-out set). It is not part of the fine-tuning pipeline above.
+`04_jailbreak_classifier` is an independent track: a prompt-safety classifier scored by ROC-AUC on a locked hold-out set. It is not part of the fine-tuning pipeline above. A single run (about 8 hours on 2× T4) trains and ensembles:
+
+- TF-IDF + logistic regression;
+- DeBERTa-v3-base and DeBERTa-v3-large;
+- Qwen2.5-3B-Instruct with a QLoRA sequence-classification head;
+- zero-shot scores from a pretrained safety model (WildGuard). This step is optional: it is skipped when no `HF_TOKEN` secret is set, because the model is gated.
+
+Each model saves its out-of-fold, hold-out and test predictions plus its training history under `models/<name>/`. A model that fails is logged and skipped. The run builds two rank-average ensembles, one with and one without the pretrained safety model, and writes `REPORT.md` with charts. Prediction files from earlier runs that are attached as inputs are reused, as long as they share the same split fingerprint. `tools/report_from_results.py` rebuilds a stdlib-only SVG report from a downloaded v1 output folder.
 
 ---
 
@@ -182,6 +189,7 @@ notebooks/
   05_compare_runs.ipynb
   src/*.py                 # source of truth, in "# %%" percent format
 tools/build_notebooks.py   # regenerates notebooks/*.ipynb from notebooks/src/*.py (stdlib only)
+tools/report_from_results.py  # Markdown + SVG report from a downloaded classifier output folder
 ```
 
 Edit the files in `notebooks/src/`, then run `python3 tools/build_notebooks.py`.

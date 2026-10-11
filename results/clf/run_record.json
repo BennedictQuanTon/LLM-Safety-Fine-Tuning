@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "run_id": "clf_20261011-060132",
+  "created_at": "2026-10-11T10:50:52.369867+00:00",
+  "split_fp": "d259780a48f0",
+  "config": {
+    "run_models": [
+      "tfidf",
+      "deberta-v3-base",
+      "deberta-v3-large",
+      "qwen2.5-3b",
+      "guard_wildguard"
+    ],
+    "seed": 42,
+    "n_folds": 5,
+    "n_holdout_splits": 5,
+    "evals_per_epoch": 4,
+    "train_probe_size": 320,
+    "ensemble_iters": 30,
+    "n_bootstrap": 2000,
+    "out_dir": "/kaggle/working/clf"
+  },
+  "environment": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "transformers": "5.16.1",
+    "gpu_count": 2,
+    "gpu": "Tesla T4",
+    "peft": "0.21.2",
+    "bitsandbytes": "0.50.2",
+    "sklearn": "1.6.1"
+  },
+  "models": {
+    "tfidf": {
+      "model": "tfidf",
+      "run_id": "clf_20261011-060132",
+      "created_at": "2026-10-11T06:03:36.770933+00:00",
+      "config": {
+        "kind": "tfidf",
+        "C_grid": [
+          4.0,
+          16.0,
+          64.0
+        ]
+      },
+      "derived": {
+        "best_C": 16.0,
+        "C_cv_auc": {
+          "4.0": 0.9583318308834285,
+          "16.0": 0.9604973845217002,
+          "64.0": 0.9602587482087084
+        }
+      },
+      "minutes": 2.01,
+      "split_fp": "d259780a48f0",
+      "environment": {
+        "python": "3.13.15",
+        "torch": "2.11.0+cu128",
+        "transformers": "5.16.1",
+        "gpu_count": 2,
+        "gpu": "Tesla T4",
+        "peft": "0.21.2",
+        "bitsandbytes": "0.50.2",
+        "sklearn": "1.6.1"
+      }
+    },
+    "deberta-v3-base": {
+      "model": "deberta-v3-base",
+      "run_id": "clf_20261011-060132",
+      "created_at": "2026-10-11T07:17:57.808491+00:00",
+      "config": {
+        "kind": "encoder",
+        "name": "microsoft/deberta-v3-base",
+        "max_len": 512,
+        "head_len": 384,
+        "lr": 2e-05,
+        "epochs": 3,
+        "batch_size": 8,
+        "grad_accum": 2
+      },
+      "derived": {
+        "devices": 2,
+        "effective_batch": 32,
+        "steps_per_epoch": 80,
+        "mean_tokens": 135.3025,
+        "truncated_pct": 0.0315625
+      },
+      "minutes": 74.35,
+      "split_fp": "d259780a48f0",
+      "environment": {
+        "python": "3.13.15",
+        "torch": "2.11.0+cu128",
+        "transformers": "5.16.1",
+        "gpu_count": 2,
+        "gpu": "Tesla T4",
+        "peft": "0.21.2",
+        "bitsandbytes": "0.50.2",
+        "sklearn": "1.6.1"
+      }
+    },
+    "qwen2.5-3b": {
+      "model": "qwen2.5-3b",
+      "run_id": "clf_20261011-060132",
+      "created_at": "2026-10-11T10:50:35.469063+00:00",
+      "config": {
+        "kind": "llm",
+        "name": "Qwen/Qwen2.5-3B-Instruct",
+        "max_len": 512,
+        "head_len": 384,
+        "lr": 0.0001,
+        "epochs": 1,
+        "batch_size": 4,
+        "grad_accum": 4,
+        "lora_r": 16,
+        "lora_alpha": 32,
+        "lora_dropout": 0.05
+      },
+      "derived": {
+        "devices": 1,
+        "effective_batch": 16,
+        "steps_per_epoch": 160,
+        "mean_tokens": 133.2459375,
+        "truncated_pct": 0.030625
+      },
+      "minutes": 212.38,
+      "split_fp": "d259780a48f0",
+      "environment": {
+        "python": "3.13.15",
+        "torch": "2.11.0+cu128",
+        "transformers": "5.16.1",
+        "gpu_count": 2,
+        "gpu": "Tesla T4",
+        "peft": "0.21.2",
+        "bitsandbytes": "0.50.2",
+        "sklearn": "1.6.1"
+      }
+    }
+  },
+  "fold_stats": {
+    "tfidf": [
+      {
+        "fold": 0,
+        "auc": 0.9601132782896574,
+        "minutes": 0.1271024227142334,
+        "peak_vram_gb": 0.0
+      },
+      {
+        "fold": 1,
+        "auc": 0.9657142857142857,
+        "minutes": 0.134007986386617,
+        "peak_vram_gb": 0.0
+      },
+      {
+        "fold": 2,
+        "auc": 0.960750378588868,
+        "minutes": 0.12783212661743165,
+        "peak_vram_gb": 0.0
+      },
+      {
+        "fold": 3,
+        "auc": 0.9541295546558706,
+        "minutes": 0.12951605717341105,
+        "peak_vram_gb": 0.0
+      },
+      {
+        "fold": 4,
+        "auc": 0.9634145108624228,
+        "minutes": 0.12507925828297933,
+        "peak_vram_gb": 0.0
+      }
+    ],
+    "deberta-v3-base": [
+      {
+        "fold": 0,
+        "auc": 0.9873957959395318,
+        "minutes": 14.759156421820324,
+        "peak_vram_gb": 11.364161536,
+        "train_steps": 240
+      },
+      {
+        "fold": 1,
+        "auc": 0.9841201935319583,
+        "minutes": 15.002376079559326,
+        "peak_vram_gb": 11.367190528,
+        "train_steps": 240
+      },
+      {
+        "fold": 2,
+        "auc": 0.985577566935542,
+        "minutes": 14.865348800023396,
+        "peak_vram_gb": 11.337872384,
+        "train_steps": 240
+      },
+      {
+        "fold": 3,
+        "auc": 0.9795242914979756,
+        "minutes": 14.979293624560038,
+        "peak_vram_gb": 11.328581632,
+        "train_steps": 240
+      },
+      {
+        "fold": 4,
+        "auc": 0.9865950929548418,
+        "minutes": 14.66850254535675,
+        "peak_vram_gb": 11.331730432,
+        "train_steps": 240
+      }
+    ],
+    "qwen2.5-3b": [
+      {
+        "fold": 0,
+        "auc": 0.9870866738462767,
+        "minutes": 42.841833162307736,
+        "peak_vram_gb": 8.548325888,
+        "train_steps": 160
+      },
+      {
+        "fold": 1,
+        "auc": 0.97764196587726,
+        "minutes": 42.33657262722651,
+        "peak_vram_gb": 6.149720064,
+        "train_steps": 160
+      },
+      {
+        "fold": 2,
+        "auc": 0.9860514468790885,
+        "minutes": 42.67285261551539,
+        "peak_vram_gb": 7.401315328,
+        "train_steps": 160
+      },
+      {
+        "fold": 3,
+        "auc": 0.9761437246963562,
+        "minutes": 42.31560208797455,
+        "peak_vram_gb": 8.64700416,
+        "train_steps": 160
+      },
+      {
+        "fold": 4,
+        "auc": 0.98309728161425,
+        "minutes": 42.172659091154735,
+        "peak_vram_gb": 9.892974592,
+        "train_steps": 160
+      }
+    ]
+  },
+  "scores": [
+    {
+      "model": "ensemble_clean",
+      "cv_auc": 0.9898346602835844,
+      "holdout_auc": 0.9910170483257534,
+      "ci95_low": 0.9847347124176881,
+      "ci95_high": 0.9959824505020928,
+      "rank_2025": "#28",
+      "rank_range": "#7 … #41"
+    },
+    {
+      "model": "qwen2.5-3b",
+      "cv_auc": 0.9817204179093109,
+      "holdout_auc": 0.990418628155004,
+      "ci95_low": 0.9853327801794265,
+      "ci95_high": 0.9947410747649355,
+      "rank_2025": "#31",
+      "rank_range": "#10 … #40"
+    },
+    {
+      "model": "deberta-v3-base",
+      "cv_auc": 0.9833781097167925,
+      "holdout_auc": 0.9836431819995213,
+      "ci95_low": 0.9749042035821553,
+      "ci95_high": 0.990960494384377,
+      "rank_2025": "#43",
+      "rank_range": "#28 … ngoài top 49 (/110)"
+    },
+    {
+      "model": "tfidf",
+      "cv_auc": 0.9604973845217002,
+      "holdout_auc": 0.962073459400516,
+      "ci95_low": 0.9480560839544837,
+      "ci95_high": 0.9739323944924025,
+      "rank_2025": "ngoài top 49 (/110)",
+      "rank_range": "ngoài top 49 (/110) … ngoài top 49 (/110)"
+    }
+  ],
+  "weights": {
+    "ensemble_clean": {
+      "tfidf": 0.2,
+      "deberta-v3-base": 0.4,
+      "qwen2.5-3b": 0.4
+    }
+  },
+  "diagnosis": {
+    "tfidf": "ổn định",
+    "deberta-v3-base": "eval loss tăng lại > 10% so với đáy ở ≥ một nửa số fold: overfit, thử ít epoch hơn hoặc lr thấp hơn; khoảng cách eval − train loss cuối = 0.267",
+    "qwen2.5-3b": "khoảng cách eval − train loss cuối = 0.088"
+  },
+  "failures": {
+    "deberta-v3-large": "OutOfMemoryError: Caught OutOfMemoryError in replica 0 on device 0.\nOriginal Traceback (most recent call last):\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/parallel/parallel_apply.py\", line 114, in _worker\n    output = module(*input, **kwargs)\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1779, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1790, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py\", line 1057, in forward\n    outputs = self.deberta(\n        input_ids,\n    ...<6 lines>...\n        return_dict=return_dict,\n    )\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1779, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1790, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py\", line 763, in forward\n    encoder_outputs = self.encoder(\n        embedding_output,\n    ...<3 lines>...\n        return_dict=return_dict,\n    )\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1779, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1790, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py\", line 651, in forward\n    output_states, attn_weights = layer_module(\n                                  ~~~~~~~~~~~~^\n        next_kv,\n        ^^^^^^^^\n    ...<4 lines>...\n        output_attentions=output_attentions,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py\", line 114, in __call__\n    return super().__call__(*args, **kwargs)\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1779, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1790, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py\", line 432, in forward\n    attention_output, att_matrix = self.attention(\n                                   ~~~~~~~~~~~~~~^\n        hidden_states,\n        ^^^^^^^^^^^^^^\n    ...<4 lines>...\n        rel_embeddings=rel_embeddings,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1779, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1790, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py\", line 365, in forward\n    self_output, att_matrix = self.self(\n                              ~~~~~~~~~^\n        hidden_states,\n        ^^^^^^^^^^^^^^\n    ...<4 lines>...\n        rel_embeddings=rel_embeddings,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1779, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py\", line 1790, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py\", line 246, in forward\n    rel_att = self.disentangled_attention_bias(\n        query_layer, key_layer, relative_pos, rel_embeddings, scale_factor\n    )\n  File \"/usr/local/lib/python3.13/dist-packages/transformers/models/deberta_v2/modeling_deberta_v2.py\", line 338, in disentangled_attention_bias\n    p2c_att = torch.gather(\n              ~~~~~~~~~~~~^\n        p2c_att,\n        ^^^^^^^^\n        dim=-1,\n        ^^^^^^^\n        index=p2c_pos.squeeze(0).expand([query_layer.size(0), key_layer.size(-2), key_layer.size(-2)]),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ).transpose(-1, -2)\n    ^\ntorch.OutOfMemoryError: CUDA out of memory. Tried to allocate 64.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 10.81 MiB is free. Including non-PyTorch memory, this process has 14.55 GiB memory in use. Of the allocated memory 14.22 GiB is allocated by PyTorch, and 128.38 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)\n",
+    "guard_wildguard": "bỏ qua: không có HF_TOKEN (mô hình gated)"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "model": "qwen2.5-3b",
+  "run_id": "clf_20261011-060132",
+  "created_at": "2026-10-11T10:50:35.469063+00:00",
+  "config": {
+    "kind": "llm",
+    "name": "Qwen/Qwen2.5-3B-Instruct",
+    "max_len": 512,
+    "head_len": 384,
+    "lr": 0.0001,
+    "epochs": 1,
+    "batch_size": 4,
+    "grad_accum": 4,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05
+  },
+  "derived": {
+    "devices": 1,
+    "effective_batch": 16,
+    "steps_per_epoch": 160,
+    "mean_tokens": 133.2459375,
+    "truncated_pct": 0.030625
+  },
+  "minutes": 212.38,
+  "split_fp": "d259780a48f0",
+  "environment": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "transformers": "5.16.1",
+    "gpu_count": 2,
+    "gpu": "Tesla T4",
+    "peft": "0.21.2",
+    "bitsandbytes": "0.50.2",
+    "sklearn": "1.6.1"
+  }
+}
