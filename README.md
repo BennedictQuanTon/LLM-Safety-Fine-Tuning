@@ -188,7 +188,7 @@ A binary classifier that gives every prompt a jailbreak score. Its quality is me
 |---|---|---|
 | TF-IDF + logistic regression | classical | word 1–2-grams + char 2–5-grams; C ∈ {4, 16, 64} chosen by CV |
 | DeBERTa-v3-base | full fine-tune, FP16 AMP, 2 GPUs | 512 tokens (head 384 + tail 128), lr 2e-5, 3 epochs, effective batch 32 |
-| DeBERTa-v3-large | full fine-tune, FP16 AMP, gradient checkpointing, 2 GPUs | 512 tokens, lr 1e-5, 2 epochs, batch 2 × accumulation 8 per GPU |
+| DeBERTa-v3-large (not yet evaluated) | full fine-tune, FP16 AMP, gradient checkpointing, 2 GPUs | 512 tokens, lr 1e-5, 2 epochs, batch 2 × accumulation 8 per GPU |
 | Qwen2.5-3B-Instruct | QLoRA (4-bit NF4, LoRA r = 16, α = 32 on all linear layers) + classification head | 512 tokens, lr 1e-4, paged AdamW 8-bit, effective batch 16, 1 epoch (v2) / 2 epochs (v3), 1 GPU |
 | WildGuard 7B (optional) | zero-shot, no training | score = logit("yes") − logit("no") after `Harmful request:`; needs an `HF_TOKEN` secret |
 
@@ -201,60 +201,68 @@ The models are combined by **rank averaging**, with weights found by greedy hill
 - Charts: `training_curves.png` (train vs. eval loss and AUC per epoch), `loss_over_time.png` (loss against wall-clock minutes across folds), `compare_models_curves.png`, `fold_summary.png`, ROC, AUC by prompt length, and score histograms.
 - `REPORT.md` adds an automatic diagnosis per model: unstable folds, NaN loss, overfitting (eval loss rising again) and underfitting.
 
-### Results: v1 vs. v2
+### Results: v1 → v2 → v3
 
 The classifier was benchmarked against the final private leaderboard of a public prompt-injection detection competition (110 teams, ROC-AUC). No submission was made; the "equivalent rank" places the hold-out AUC on that leaderboard.
 
-| | **v1** | **v2** |
-|---|---|---|
-| Models in the ensemble | TF-IDF + LR, DeBERTa-v3-base | TF-IDF + LR, DeBERTa-v3-base, **Qwen2.5-3B QLoRA** |
-| Ensemble weights (hill-climbing on OOF) | TF-IDF 1/3 · DeBERTa 2/3 | TF-IDF 0.2 · DeBERTa 0.4 · Qwen 0.4 |
-| Hardware | Kaggle 2× T4 | Kaggle 2× T4 |
-| Training time (5 folds) | ~1.3 h | ~4.8 h (Qwen 3.5 h, DeBERTa 1.2 h) |
-| CV AUC (dev OOF) | 0.9836 | 0.9898 |
-| **Hold-out ROC-AUC** | **0.9848** | **0.9910** (95% CI 0.985–0.996) |
-| Equivalent leaderboard rank | #41 / 110 | **#28 / 110** (95% CI #7–#41) |
-| Hold-out accuracy (dev-chosen threshold) | — | 95.75% (precision 92.1%, recall 97.0%) |
+| | **v1** | **v2** | **v3** |
+|---|---|---|---|
+| Models in the ensemble | TF-IDF + LR, DeBERTa-v3-base | + **Qwen2.5-3B QLoRA** (1 epoch) | Qwen2.5-3B **2 epochs**, + **WildGuard** (zero-shot) |
+| Ensemble weights (hill-climbing on OOF) | TF-IDF 1/3 · DeBERTa 2/3 | TF-IDF 0.2 · DeBERTa 0.4 · Qwen 0.4 | clean: DeBERTa 1/3 · Qwen 2/3 — all: TF-IDF 0.2 · Qwen 0.4 · WildGuard 0.4 |
+| Hardware | Kaggle 2× T4 | Kaggle 2× T4 | Kaggle 2× T4 |
+| Run time | ~1.3 h | ~4.8 h | ~8.2 h (Qwen 6.5 h) |
+| CV AUC (dev OOF, clean) | 0.9836 | 0.9898 | 0.9926 |
+| **Hold-out ROC-AUC, clean** | **0.9848** | **0.9910** (CI 0.985–0.996) | **0.9948** (CI 0.991–0.998) |
+| **Hold-out ROC-AUC, all** | — | — | **0.9975** (CI 0.994–0.999) |
+| Equivalent leaderboard rank | #41 / 110 | #28 / 110 | **#10** clean · **#2** all (CI #1–#11) |
+| Hold-out accuracy (dev-chosen threshold) | — | 95.75% | **97.62%** (precision 95.5%, recall 98.3%) |
+
+`clean` uses only models trained on the task data; `all` also includes WildGuard, which was pretrained on data close to this task, so its score may be optimistic.
 
 Hold-out ROC-AUC per model (800 prompts):
 
-| Model | v1 | v2 |
-|---|---|---|
-| TF-IDF + LR | 0.9621 | 0.9621 |
-| DeBERTa-v3-base | 0.9833 | 0.9836 |
-| Qwen2.5-3B QLoRA (1 epoch) | — | 0.9904 |
-| DeBERTa-v3-large | — | failed (out of memory) |
-| **Ensemble** | **0.9848** | **0.9910** |
-
-The gain from v1 to v2 comes almost entirely from **Qwen2.5-3B as a classifier**: on its own it already beats the v1 ensemble, and it is strongest on long role-play prompts where keyword models fail.
+| Model | v1 | v2 | v3 |
+|---|---|---|---|
+| TF-IDF + LR | 0.9621 | 0.9621 | 0.9621 |
+| DeBERTa-v3-base | 0.9833 | 0.9836 | 0.9836 |
+| Qwen2.5-3B QLoRA | — | 0.9904 (1 epoch) | **0.9956** (2 epochs) |
+| WildGuard 7B (zero-shot) | — | — | 0.9857 |
+| DeBERTa-v3-large | — | failed (out of memory) | skipped (time budget) |
+| **Ensemble** | **0.9848** | **0.9910** | **0.9948** clean · **0.9975** all |
 
 <p align="center">
-  <img src="results/clf/charts/leaderboard_position.png" width="49%" alt="Hold-out AUC placed on the competition leaderboard">
-  <img src="results/clf/charts/holdout_auc_ci.png" width="49%" alt="Hold-out AUC with 95% bootstrap confidence intervals">
+  <img src="result_v3/v3/charts/leaderboard_position.png" width="49%" alt="v3 hold-out AUC placed on the competition leaderboard">
+  <img src="result_v3/v3/charts/holdout_auc_ci.png" width="49%" alt="v3 hold-out AUC with 95% bootstrap confidence intervals">
 </p>
 
 <p align="center">
-  <img src="results/clf/charts/training_curves.png" width="90%" alt="Train vs. eval loss and AUC per epoch for DeBERTa-v3-base and Qwen2.5-3B">
+  <img src="result_v3/v3/charts/training_curves.png" width="90%" alt="v3 train vs. eval loss and AUC per epoch for DeBERTa-v3-base and Qwen2.5-3B">
 </p>
 
-The full v2 report, with per-fold statistics, AUC by prompt length, ROC curves, score distributions and the hardest hold-out errors, is in [`results/clf/REPORT.md`](results/clf/REPORT.md).
+<p align="center">
+  <img src="result_v3/v3/charts/auc_by_length.png" width="70%" alt="v3 hold-out AUC by prompt length for each model">
+</p>
+
+Full reports, with per-fold statistics, ROC curves, score distributions and the hardest hold-out errors: [v3](result_v3/v3/REPORT.md) · [v2](results/clf/REPORT.md).
 
 Findings from the telemetry:
-- Most remaining errors are **long role-play prompts** (60+ words), where the label depends on intent rather than keywords. Qwen raised AUC on these from about 0.970 to about 0.983.
-- **DeBERTa-base overfits after about 2 epochs**: eval loss bottoms out and then rises while train loss keeps falling.
-- **Qwen was still improving at the end of epoch 1**, with a small train–eval gap.
+- **Fine-tuned Qwen2.5-3B is the strongest single model.** In v2 it was still improving at the end of epoch 1; a second epoch lifted hold-out AUC from 0.9904 to 0.9956, above the whole v2 ensemble. The weakest fold rose from 0.976 to 0.987.
+- **Two epochs is the stopping point for Qwen.** Eval loss still fell (0.199 → 0.168), but the train–eval gap widened from 0.10 to 0.15 and the training-probe loss approached zero.
+- **WildGuard and Qwen fail in different places.** WildGuard reaches ~0.997 on prompts of 60+ tokens but only 0.80 on prompts under 20 tokens, where Qwen is strong. Combining them gives the best ensemble.
+- **DeBERTa-base overfits after about 2.5 epochs**: eval loss bottoms out and then rises while AUC stays flat. In v3 it receives zero weight in the `all` ensemble.
+- Remaining errors: German-language injections, very short prompts and benign role-play prompts.
 - The loss logged during training is inflated by the gradient-accumulation factor under transformers 5. The re-measured probe loss is the reliable curve.
 
 ### v3 changes
 
-| Change | Reason |
-|---|---|
-| Qwen2.5-3B trained for 2 epochs; the 1-epoch v2 model is kept as an extra ensemble member (`@prev1`) | validation AUC was still rising at the end of epoch 1 |
-| DeBERTa-v3-large: batch 2 × accumulation 8, gradient checkpointing, `expandable_segments`, 2 epochs | v2 ran out of memory on GPU 0; the base model shows that 2 epochs are enough |
-| Unchanged models are reused from the previous run's outputs (same config and split fingerprint) | saves about 1.3 GPU-hours |
-| Time budget (11.3 h) checked before every model and every fold | the run always finishes and saves outputs inside Kaggle's 12-hour limit |
-| One-line failure messages in the report; outputs written to `/kaggle/working/<version>/` | readable reports; no overwriting of earlier results |
-| Accuracy / precision / recall / F1 with a dev-chosen threshold | answers "how often is it right" alongside ROC-AUC |
+| Change | Reason | Outcome |
+|---|---|---|
+| Qwen2.5-3B trained for 2 epochs | validation AUC was still rising at the end of epoch 1 | +0.005 hold-out AUC; largest gain of v3 |
+| WildGuard added as a zero-shot ensemble member | different error profile from the fine-tuned models | best ensemble (`all`) |
+| DeBERTa-v3-large: batch 2 × accumulation 8, gradient checkpointing, `expandable_segments`, 2 epochs | v2 ran out of memory on GPU 0 | skipped by the time budget |
+| Unchanged models reused from the previous run's outputs (same config and split fingerprint) | saves about 1.3 GPU-hours | not triggered: the v2 output was not attached as input |
+| Time budget (11.3 h) checked before every model and every fold | the run must finish inside Kaggle's 12-hour limit | worked: finished at ~8.2 h with all outputs saved |
+| Accuracy / precision / recall / F1 with a dev-chosen threshold | answers "how often is it right" alongside ROC-AUC | 97.62% accuracy |
 
 ## Repository layout
 
