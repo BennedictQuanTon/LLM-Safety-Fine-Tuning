@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "run_id": "qwen2.5-3b_r16_a32_lr2e-04_bs16_ep1_baseline_20261012-071208",
+  "run_name": "qwen2.5-3b_r16_a32_lr2e-04_bs16_ep1_baseline",
+  "created_at": "2026-10-12T09:17:32",
+  "config": {
+    "seed": 3407,
+    "model_name": "unsloth/Qwen2.5-3B-Instruct-bnb-4bit",
+    "max_seq_length": 1024,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.0,
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "learning_rate": 0.0002,
+    "lr_scheduler_type": "cosine",
+    "warmup_ratio": 0.05,
+    "weight_decay": 0.01,
+    "max_grad_norm": 0.3,
+    "per_device_train_batch_size": 4,
+    "gradient_accumulation_steps": 4,
+    "num_train_epochs": 1,
+    "max_steps": -1,
+    "logging_steps": 5,
+    "eval_steps": 20,
+    "save_steps": 40,
+    "early_stopping_patience": 5,
+    "max_eval_samples": 300,
+    "train_probe_size": 150,
+    "resume_from_checkpoint": null,
+    "run_tag": "baseline",
+    "wandb_project": "llm-finetune",
+    "output_dir": "/kaggle/working/outputs",
+    "adapter_dir": "/kaggle/working/lora_adapter"
+  },
+  "derived": {
+    "effective_batch_size": 16,
+    "total_steps": 655,
+    "warmup_steps": 34,
+    "trainable_params": 29933568,
+    "trainable_pct": 1.731659174973876
+  },
+  "data": {
+    "n_train": 10563,
+    "n_val": 300,
+    "mean_tokens": 355.9,
+    "p95_tokens": 632,
+    "max_tokens": 5361,
+    "train_category_counts": {
+      "instruction": 5235,
+      "qa": 2193,
+      "unanswerable": 923,
+      "injection_direct": 833,
+      "injection_indirect": 691,
+      "qa_json": 688
+    },
+    "prep_stats": {
+      "train": {
+        "total": 10563,
+        "by_category": {
+          "injection_indirect": 691,
+          "qa_json": 688,
+          "injection_direct": 833,
+          "instruction": 5235,
+          "unanswerable": 923,
+          "qa": 2193
+        },
+        "avg_tokens": 2.0
+      },
+      "test": {
+        "total": 858,
+        "by_category": {
+          "qa": 171,
+          "instruction": 446,
+          "injection_direct": 64,
+          "qa_json": 60,
+          "unanswerable": 55,
+          "injection_indirect": 62
+        },
+        "avg_tokens": 2.0
+      },
+      "val": {
+        "total": 633,
+        "by_category": {
+          "injection_indirect": 47,
+          "instruction": 319,
+          "unanswerable": 22,
+          "qa": 136,
+          "injection_direct": 57,
+          "qa_json": 52
+        },
+        "avg_tokens": 2.0
+      },
+      "dropped_duplicates": 42,
+      "dropped_too_long": {}
+    }
+  },
+  "environment": {
+    "gpu": "Tesla T4",
+    "vram_total_gb": 14.56,
+    "precision": "fp16",
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "transformers": "5.16.1",
+    "trl": "1.13.0",
+    "unsloth": "2026.10.3"
+  },
+  "results": {
+    "global_step": 655,
+    "stopped_early": false,
+    "best_checkpoint": "/kaggle/working/outputs/checkpoint-640",
+    "train_runtime_min": 123.97790833333333
+  },
+  "health": {
+    "nan_or_inf_steps": 0,
+    "loss_spikes": 0,
+    "final_train_loss_logged": 0.999676914215088,
+    "final_train_loss": 0.7752146124839783,
+    "grad_norm_p50": 0.4747697412967682,
+    "grad_norm_p95": 0.7257921695709229,
+    "grad_norm_max": 1.7983402013778687,
+    "eval_loss_first": 1.0874838829040527,
+    "eval_loss_best": 0.8762405514717102,
+    "eval_loss_final": 0.8762787580490112,
+    "best_step": 640,
+    "improvement_pct": 19.4249620388149,
+    "overfit_rise_pct": 0.0043602840837318755,
+    "steps_to_90pct": 220,
+    "generalization_gap": 0.10106414556503296,
+    "tokens_per_sec_mean": 626.271129532421,
+    "vram_peak_gb": 5.216796875
+  },
+  "category_eval_loss": {},
+  "diagnosis": {
+    "code": "HEALTHY",
+    "message": "HỘI TỤ TỐT: eval_loss 1.0875 → 0.8762 (-19.4%), cuối 0.8763."
+  }
+}

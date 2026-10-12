@@ -90,16 +90,18 @@ Loss alone does not show whether behaviour improved. `03_eval_compare` loads the
 
 ## Training health monitoring
 
-Every run of `02_sft_qlora_unsloth` produces a six-panel diagnostic dashboard, `training_health.png`:
+Every run of `02_sft_qlora_unsloth` produces an eight-panel diagnostic dashboard, `training_health.png`:
 
 | Panel | What it shows | Healthy pattern |
 |---|---|---|
-| Loss | Raw and smoothed train loss, eval loss, best checkpoint ⭐, warmup region, detected spikes ✕ | Both curves decrease, then plateau together |
-| Generalization gap | eval − train over time | Small and flat; steady growth signals memorisation |
-| Gradient norm | Per-step norm with median and 5× median reference lines | Stable band, no explosions |
+| Loss | Logged train loss, a fixed train-probe loss, eval loss, best checkpoint ⭐, warmup region, detected spikes ✕ | Probe and eval decrease, then plateau together. Logged train loss is not on the same scale |
+| Generalization gap | eval − train probe over time | Small and flat; steady growth signals memorisation |
+| Gradient norm | Per-step norm with median and 5× median reference lines | Stable band after the first steps, no explosions |
 | Learning rate | The actual schedule | Linear warmup followed by cosine decay |
 | Throughput | Approximate tokens/s | Flat; used to compare cost across configs |
 | VRAM | Allocated and peak reserved vs GPU limit | Comfortably below the limit |
+| Eval loss by category | Validation loss before training (LoRA B = 0, so this is the base model) and after | Every category drops |
+| Change by category | Percent change in that loss | Negative (green) means the behaviour was learned |
 
 An automatic diagnosis is computed from these signals and printed on the dashboard:
 
@@ -168,6 +170,37 @@ For each notebook:
 The default pipeline uses roughly 3–5 GPU hours of the 30 h weekly quota.
 
 **Resuming:** checkpoints are saved every 40 steps under `outputs/`. Attach the interrupted run's output as an input and set `CONFIG["resume_from_checkpoint"]`.
+
+---
+
+## Baseline SFT run
+
+One full pass of notebooks 01 and 02 on Kaggle. Behavioural scores from notebook 03 are not in yet.
+
+| | Baseline |
+|---|---|
+| Run | `qwen2.5-3b_r16_a32_lr2e-04_bs16_ep1_baseline_20261012-071208` |
+| Model | Qwen2.5-3B-Instruct, QLoRA r = 16, α = 32, dropout 0, 7 linear modules |
+| Schedule | lr 2e-4, cosine, 5% warmup (34 steps), 1 epoch, effective batch 16, max length 1024, FP16, grad clip 0.3 |
+| Data | 10,563 train · 300 val · 150-prompt train probe. Mix: instruction 5,235 · qa 2,193 · unanswerable 923 · injection_direct 833 · injection_indirect 691 · qa_json 688 |
+| Tokens | mean 356, P95 632 (a few samples exceed 1024 and are truncated) |
+| Hardware | Kaggle Tesla T4, one GPU used · 124 min · 655 / 655 steps · no early stop |
+| Trainable | 29.9M parameters (1.73%) |
+| **Diagnosis** | **`HEALTHY`** |
+| Eval loss | 1.0875 → **0.8762** at step 640 (−19.4%), final 0.8763 |
+| Train-probe loss | 0.775 |
+| Generalization gap | 0.101, flat |
+| Spikes / NaN | 0 / 0 |
+| Grad norm p50 / p95 / max | 0.48 / 0.73 / 1.80 |
+| Throughput / peak VRAM | ~626 tokens/s · 5.2 / 14.6 GB |
+
+Most of the gain is in the first ~220 steps. The saved adapter is the step-640 checkpoint. A second epoch is optional; the curve is already flat, and notebook 03 should be read before spending another GPU run.
+
+<p align="center">
+  <img src="SFT%202%20Result/training_health.png" width="100%" alt="Eight-panel training-health dashboard for the Qwen2.5-3B QLoRA baseline">
+</p>
+
+Per-category bars are empty on this run: the trainer dropped sequences longer than 1024 tokens, so category labels no longer lined up with the validation set. The full report is [`SFT 2 Result/REPORT.md`](SFT%202%20Result/REPORT.md).
 
 ---
 
