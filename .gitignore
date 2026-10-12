@@ -2,6 +2,7 @@
 *.log
 rmit-hackathon-2025/
 __pycache__/
+docs/
 
 *.md
 !README.md

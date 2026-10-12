@@ -176,9 +176,14 @@ def require_column(row: dict, *candidates: str):
 # ## 1. Instruction tiếng Việt (Bactrian-X)
 
 # %%
+def load_bactrian(name, lang):
+    # datasets ≥ 4 không chạy loading script (Bactrian-X.py) nữa, nên đọc thẳng file JSON gốc trên Hub.
+    return load_dataset("json", data_files=f"hf://datasets/{name}/data/{lang}.json.gz", split="train")
+
+
 def build_instruction():
     name, lang = CONFIG["instruction_source"]
-    ds = load_dataset(name, lang, split="train").shuffle(seed=CONFIG["seed"])
+    ds = load_bactrian(name, lang).shuffle(seed=CONFIG["seed"])
     records = []
     for row in ds:
         instruction = clean_text(require_column(row, "instruction"))
@@ -375,7 +380,7 @@ def fertility(texts):
 
 vi_texts = [r["messages"][2]["content"] for r in instr[:CONFIG["n_fertility_samples"]]]
 en_name, en_lang = CONFIG["instruction_source_en"]
-en_ds = load_dataset(en_name, en_lang, split="train").shuffle(seed=CONFIG["seed"])
+en_ds = load_bactrian(en_name, en_lang).shuffle(seed=CONFIG["seed"])
 en_texts = [clean_text(row["output"]) for row in en_ds.select(range(CONFIG["n_fertility_samples"]))]
 
 fert = {"tokenizer": CONFIG["tokenizer_name"], "vi": fertility(vi_texts), "en": fertility(en_texts)}
