@@ -8,6 +8,7 @@ docs/
 !README.md
 !results/clf/REPORT.md
 !result_v3/v3/REPORT.md
+!SFT 2 Result/REPORT.md
 
 results/__results___files/
 results/__huggingface_repos__.json
@@ -18,3 +19,10 @@ result_v3/__results___files/
 result_v3/__huggingface_repos__.json
 result_v3/v3/*.csv
 result_v3/v3/models/**/preds.npz
+
+SFT 2 Result/lora_adapter/
+SFT 2 Result/outputs/
+SFT 2 Result/huggingface_tokenizers_cache/
+SFT 2 Result/unsloth_compiled_cache/
+SFT 2 Result/__results___files/
+SFT 2 Result/__huggingface_repos__.json
