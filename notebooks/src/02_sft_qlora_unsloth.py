@@ -65,6 +65,7 @@ CONFIG = dict(
     save_steps=40,
     early_stopping_patience=5,
     max_eval_samples=300,
+    train_probe_size=150,
     resume_from_checkpoint=None,
     run_tag="baseline",
     wandb_project="llm-finetune",
@@ -149,7 +150,10 @@ def to_text(batch):
 dataset = raw.map(to_text, batched=True, remove_columns=raw["train"].column_names)
 print(dataset["train"][0]["text"][:800])
 
-train_token_lens = np.array([len(ids) for ids in tokenizer(dataset["train"]["text"], add_special_tokens=False)["input_ids"]])
+# Tokenizer mới không nhận cột Dataset (Arrow) như list[str]; encode từng câu.
+train_token_lens = np.array([
+    len(tokenizer.encode(t, add_special_tokens=False)) for t in dataset["train"]["text"]
+])
 DATA_STATS = dict(
     n_train=len(dataset["train"]),
     n_val=len(dataset["validation"]),
@@ -200,7 +204,7 @@ args = SFTConfig(
     save_steps=CONFIG["save_steps"],
     save_total_limit=3,
     load_best_model_at_end=True,
-    metric_for_best_model="eval_loss",
+    metric_for_best_model="eval_val_loss",
     greater_is_better=False,
     report_to=report_to,
     run_name=RUN_NAME,
@@ -262,6 +266,39 @@ print("Phần được học (phải chỉ là câu trả lời của assistant)
 print(tokenizer.decode(labels))
 
 # %% [markdown]
+# ## Tập đo phụ: train probe và eval loss theo nhóm
+# - `train_probe`: một mẫu train cố định, đo loss **cùng cách** với val ở mỗi lần đánh giá. Loss in ra lúc train bị nhân theo
+#   hệ số gom batch ở transformers 5, nên khoảng cách train–eval được tính từ probe, không từ loss lúc train.
+# - Theo nhóm: eval loss của từng category, đo **trước khi train** (LoRA khởi tạo B = 0 nên bằng mô hình gốc) và **sau khi train**.
+
+# %%
+VAL_SET = trainer.eval_dataset
+probe_idx = np.random.default_rng(CONFIG["seed"]).choice(
+    len(trainer.train_dataset), size=min(CONFIG["train_probe_size"], len(trainer.train_dataset)), replace=False
+)
+trainer.eval_dataset = {"val": VAL_SET, "train_probe": trainer.train_dataset.select(sorted(probe_idx.tolist()))}
+
+val_categories = raw["validation"]["category"] if "category" in raw["validation"].column_names else []
+CATEGORY_SETS = {}
+if len(val_categories) == len(VAL_SET):
+    for cat in sorted(set(val_categories)):
+        CATEGORY_SETS[cat] = VAL_SET.select([i for i, c in enumerate(val_categories) if c == cat])
+else:
+    print(f"⚠️ Bỏ qua eval theo nhóm: val có {len(VAL_SET)} mẫu sau tokenize nhưng {len(val_categories)} nhãn category.")
+print("Số mẫu val theo nhóm:", {k: len(v) for k, v in CATEGORY_SETS.items()})
+
+
+def eval_by_category():
+    return {
+        cat: float(trainer.evaluate(eval_dataset=ds, metric_key_prefix=f"cat_{cat}")[f"cat_{cat}_loss"])
+        for cat, ds in CATEGORY_SETS.items()
+    }
+
+
+CAT_LOSS_BEFORE = eval_by_category()
+print("Eval loss theo nhóm, trước khi train:", {k: round(v, 4) for k, v in CAT_LOSS_BEFORE.items()})
+
+# %% [markdown]
 # ## Huấn luyện
 
 # %%
@@ -276,6 +313,12 @@ train_result = trainer.train(resume_from_checkpoint=CONFIG["resume_from_checkpoi
 
 print(f"Thời gian: {train_result.metrics['train_runtime'] / 60:.1f} phút | VRAM đỉnh: {gpu_mem_gb()} GB")
 
+CAT_LOSS_AFTER = eval_by_category()
+CATEGORY_LOSS = pd.DataFrame({"before": CAT_LOSS_BEFORE, "after": CAT_LOSS_AFTER})
+if not CATEGORY_LOSS.empty:
+    CATEGORY_LOSS["change_pct"] = (CATEGORY_LOSS["after"] - CATEGORY_LOSS["before"]) / CATEGORY_LOSS["before"] * 100
+print(CATEGORY_LOSS.round(4))
+
 # %% [markdown]
 # ## Lưu adapter và log đầy đủ
 
@@ -283,10 +326,28 @@ print(f"Thời gian: {train_result.metrics['train_runtime'] / 60:.1f} phút | VR
 model.save_pretrained(CONFIG["adapter_dir"])
 tokenizer.save_pretrained(CONFIG["adapter_dir"])
 
-log = pd.DataFrame(trainer.state.log_history)
+raw_log = pd.DataFrame(trainer.state.log_history)
+print("Cột log:", list(raw_log.columns))
+
+
+def first_col(df, *names):
+    for n in names:
+        if n in df.columns:
+            return n
+    for n in names:
+        hits = [c for c in df.columns if n in str(c)]
+        if hits:
+            return hits[0]
+    return None
+
+
+eval_src = first_col(raw_log, "eval_val_loss", "eval_loss")
+probe_src = first_col(raw_log, "eval_train_probe_loss", "probe_loss")
+log = raw_log.rename(columns={k: v for k, v in {eval_src: "eval_loss", probe_src: "probe_loss"}.items() if k})
 health = pd.DataFrame(health_cb.rows)
 train_log = log[log["loss"].notna()].reset_index(drop=True) if "loss" in log else pd.DataFrame(columns=["step", "loss"])
 eval_log = log[log["eval_loss"].notna()].reset_index(drop=True) if "eval_loss" in log else pd.DataFrame(columns=["step", "eval_loss"])
+probe_log = log[log["probe_loss"].notna()].reset_index(drop=True) if "probe_loss" in log else pd.DataFrame(columns=["step", "probe_loss"])
 log.merge(health, on="step", how="left").to_csv("/kaggle/working/training_log.csv", index=False)
 
 TOTAL_STEPS = trainer.state.max_steps
@@ -303,7 +364,7 @@ TOTAL_PARAMS = sum(p.numel() for p in model.parameters())
 # |---|---|---|
 # | `improvement_pct` | `eval_loss` giảm bao nhiêu % từ lần đo đầu đến đáy | càng cao càng tốt (≥ 5%) |
 # | `overfit_rise_pct` | `eval_loss` cuối cao hơn đáy bao nhiêu % | ≈ 0 (> 5% là overfit) |
-# | `generalization_gap` | `eval_loss` cuối − `train_loss` cuối | nhỏ và không doãng dần |
+# | `generalization_gap` | `eval_loss` cuối − loss cuối trên train probe | nhỏ và không doãng dần |
 # | `steps_to_90pct` | số bước để đạt 90% mức cải thiện | nhỏ = hội tụ nhanh |
 # | `loss_spikes` | số lần loss vọt > 1.5× trung vị gần đó (sau warmup) | 0 |
 # | `nan_or_inf_steps` | số bước loss ra NaN/Inf | 0 |
@@ -311,7 +372,7 @@ TOTAL_PARAMS = sum(p.numel() for p in model.parameters())
 # | `tokens_per_sec_mean`, `vram_peak_gb` | tốc độ và bộ nhớ | để so chi phí giữa các cấu hình |
 
 # %%
-def compute_health(train_log, eval_log, health, warmup_steps):
+def compute_health(train_log, eval_log, probe_log, health, warmup_steps):
     h, spike_steps = {}, []
     if not train_log.empty:
         losses = train_log["loss"].to_numpy(float)
@@ -322,12 +383,15 @@ def compute_health(train_log, eval_log, health, warmup_steps):
         spikes = finite & (steps > warmup_steps) & np.isfinite(local_median) & (losses > 1.5 * local_median)
         spike_steps = steps[spikes].tolist()
         h["loss_spikes"] = len(spike_steps)
-        h["final_train_loss"] = float(np.nanmean(losses[-5:]))
+        h["final_train_loss_logged"] = float(np.nanmean(losses[-5:]))
+        h["final_train_loss"] = h["final_train_loss_logged"]
         if "grad_norm" in train_log:
             gn = train_log["grad_norm"].to_numpy(float)
             gn = gn[np.isfinite(gn)]
             if len(gn):
                 h.update(grad_norm_p50=float(np.median(gn)), grad_norm_p95=float(np.percentile(gn, 95)), grad_norm_max=float(gn.max()))
+    if not probe_log.empty:
+        h["final_train_loss"] = float(probe_log["probe_loss"].iloc[-1])
     if not eval_log.empty:
         ev, ev_steps = eval_log["eval_loss"].to_numpy(float), eval_log["step"].to_numpy()
         first, best, last = ev[0], ev.min(), ev[-1]
@@ -363,7 +427,7 @@ def diagnose(h):
                        f"(-{h['improvement_pct']:.1f}%), cuối {h['eval_loss_final']:.4f}.")
 
 
-HEALTH, SPIKE_STEPS = compute_health(train_log, eval_log, health, WARMUP_STEPS)
+HEALTH, SPIKE_STEPS = compute_health(train_log, eval_log, probe_log, health, WARMUP_STEPS)
 DIAG_CODE, DIAG_MSG = diagnose(HEALTH)
 print(DIAG_MSG)
 pd.Series(HEALTH).round(4)
@@ -371,12 +435,15 @@ pd.Series(HEALTH).round(4)
 # %% [markdown]
 # ## Bảng biểu đồ sức khỏe (`training_health.png`)
 #
-# 1. **Loss**: train (mờ = thô, đậm = làm mượt) và eval; ⭐ = checkpoint tốt nhất; vùng xám = warmup; ✕ đỏ = loss spike.
-# 2. **Generalization gap**: eval − train theo thời gian. Đi lên đều đặn = bắt đầu học thuộc.
+# 1. **Loss**: xanh nhạt = loss lúc train (log, có thể bị phóng đại theo gom batch); xanh lá = train probe (đo lại, so được
+#    với eval); cam = eval; ⭐ = checkpoint tốt nhất; vùng xám = warmup; ✕ đỏ = loss spike.
+# 2. **Generalization gap**: eval − train probe theo thời gian. Đi lên đều đặn = bắt đầu học thuộc.
 # 3. **Gradient norm**: đường gạch = trung vị; vượt xa ngưỡng 5× = gradient bùng nổ.
 # 4. **Learning rate**: phải thấy warmup rồi giảm theo cosine.
 # 5. **Throughput**: tokens/s ước lượng, để so chi phí giữa các cấu hình.
 # 6. **VRAM**: bộ nhớ GPU so với giới hạn của card.
+# 7. **Eval loss theo nhóm**: trước (= mô hình gốc) và sau khi train.
+# 8. **Thay đổi % theo nhóm**: nhóm nào học được nhiều, nhóm nào không đổi hoặc tệ đi.
 
 # %%
 SPECS_LINE = (
@@ -386,34 +453,47 @@ SPECS_LINE = (
     f"seq={CONFIG['max_seq_length']} {PRECISION} | trainable={TRAINABLE_PARAMS / 1e6:.1f}M ({TRAINABLE_PARAMS / TOTAL_PARAMS:.2%})"
 )
 
-fig, ax = plt.subplots(2, 3, figsize=(21, 10))
-ax_loss, ax_gap, ax_gn, ax_lr, ax_tps, ax_mem = ax.flatten()
+fig, ax = plt.subplots(2, 4, figsize=(28, 10))
+ax_loss, ax_gap, ax_gn, ax_lr, ax_tps, ax_mem, ax_cat, ax_catd = ax.flatten()
 
 if not train_log.empty:
     smooth = train_log["loss"].rolling(5, min_periods=1).mean()
     ax_loss.plot(train_log["step"], train_log["loss"], color="tab:blue", alpha=0.25)
-    ax_loss.plot(train_log["step"], smooth, color="tab:blue", label="train_loss (smoothed)")
+    ax_loss.plot(train_log["step"], smooth, color="tab:blue", label="train_loss logged (smoothed)")
     spikes = train_log[train_log["step"].isin(SPIKE_STEPS)]
     ax_loss.scatter(spikes["step"], spikes["loss"], color="red", marker="x", s=60, zorder=5, label="loss spike")
+if not probe_log.empty:
+    ax_loss.plot(probe_log["step"], probe_log["probe_loss"], "o-", color="tab:green", label="train probe loss")
 if not eval_log.empty:
     ax_loss.plot(eval_log["step"], eval_log["eval_loss"], "o-", color="tab:orange", label="eval_loss")
-    ax_loss.scatter([HEALTH["best_step"]], [HEALTH["eval_loss_best"]], marker="*", s=300, color="gold",
-                    edgecolor="black", zorder=6, label=f"best @ {HEALTH['best_step']} = {HEALTH['eval_loss_best']:.4f}")
+    if "best_step" in HEALTH:
+        ax_loss.scatter([HEALTH["best_step"]], [HEALTH["eval_loss_best"]], marker="*", s=300, color="gold",
+                        edgecolor="black", zorder=6, label=f"best @ {HEALTH['best_step']} = {HEALTH['eval_loss_best']:.4f}")
 for a in (ax_loss, ax_lr):
     a.axvspan(0, WARMUP_STEPS, color="grey", alpha=0.15, label="warmup")
 ax_loss.set_title("Loss"); ax_loss.legend(fontsize=8)
 
-if not eval_log.empty and not train_log.empty:
+if not eval_log.empty and "probe_loss" in eval_log.columns:
+    ax_gap.plot(eval_log["step"], eval_log["eval_loss"] - eval_log["probe_loss"], "o-", color="tab:purple")
+    ax_gap.axhline(0, color="black", lw=0.8)
+    ax_gap.set_title("Generalization gap (eval − train probe)")
+elif not eval_log.empty and not probe_log.empty and "probe_loss" in probe_log.columns:
+    gap = eval_log[["step", "eval_loss"]].merge(probe_log[["step", "probe_loss"]].drop_duplicates("step"), on="step")
+    ax_gap.plot(gap["step"], gap["eval_loss"] - gap["probe_loss"], "o-", color="tab:purple")
+    ax_gap.axhline(0, color="black", lw=0.8)
+    ax_gap.set_title("Generalization gap (eval − train probe)")
+elif not eval_log.empty and not train_log.empty:
     train_smooth_at_eval = np.interp(eval_log["step"], train_log["step"], smooth)
     ax_gap.plot(eval_log["step"], eval_log["eval_loss"] - train_smooth_at_eval, "o-", color="tab:purple")
     ax_gap.axhline(0, color="black", lw=0.8)
-ax_gap.set_title("Generalization gap (eval − train)")
+    ax_gap.set_title("Generalization gap (eval − train logged)")
 
 if "grad_norm" in train_log and train_log["grad_norm"].notna().any():
     ax_gn.plot(train_log["step"], train_log["grad_norm"], color="tab:red", alpha=0.8)
-    ax_gn.axhline(HEALTH["grad_norm_p50"], ls="--", color="black", lw=0.8, label=f"median {HEALTH['grad_norm_p50']:.3f}")
-    ax_gn.axhline(5 * HEALTH["grad_norm_p50"], ls=":", color="red", lw=0.8, label="5× median")
-    ax_gn.legend(fontsize=8)
+    if "grad_norm_p50" in HEALTH:
+        ax_gn.axhline(HEALTH["grad_norm_p50"], ls="--", color="black", lw=0.8, label=f"median {HEALTH['grad_norm_p50']:.3f}")
+        ax_gn.axhline(5 * HEALTH["grad_norm_p50"], ls=":", color="red", lw=0.8, label="5× median")
+        ax_gn.legend(fontsize=8)
 ax_gn.set_title(f"Gradient norm (clipped at {CONFIG['max_grad_norm']})")
 
 if "learning_rate" in train_log:
@@ -422,16 +502,32 @@ ax_lr.set_title("Learning rate")
 
 if not health.empty:
     ax_tps.plot(health["step"], health["tokens_per_sec"], color="tab:cyan")
-    ax_tps.axhline(HEALTH["tokens_per_sec_mean"], ls="--", color="black", lw=0.8, label=f"mean {HEALTH['tokens_per_sec_mean']:.0f}")
-    ax_tps.legend(fontsize=8)
+    if "tokens_per_sec_mean" in HEALTH:
+        ax_tps.axhline(HEALTH["tokens_per_sec_mean"], ls="--", color="black", lw=0.8, label=f"mean {HEALTH['tokens_per_sec_mean']:.0f}")
+        ax_tps.legend(fontsize=8)
     ax_mem.plot(health["step"], health["vram_allocated_gb"], label="allocated")
     ax_mem.plot(health["step"], health["vram_peak_gb"], label="peak reserved")
 ax_mem.axhline(VRAM_TOTAL_GB, color="red", ls="--", lw=0.8, label=f"GPU limit {VRAM_TOTAL_GB:.1f} GB")
 ax_mem.legend(fontsize=8)
 ax_tps.set_title("Throughput (≈ tokens/s)"); ax_mem.set_title("VRAM (GB)")
 
+if not CATEGORY_LOSS.empty:
+    y = np.arange(len(CATEGORY_LOSS))
+    ax_cat.barh(y - 0.2, CATEGORY_LOSS["before"], height=0.4, color="tab:gray", label="before (base)")
+    ax_cat.barh(y + 0.2, CATEGORY_LOSS["after"], height=0.4, color="tab:orange", label="after (best checkpoint)")
+    ax_cat.set_yticks(y, CATEGORY_LOSS.index); ax_cat.invert_yaxis(); ax_cat.legend(fontsize=8)
+    ax_catd.barh(y, CATEGORY_LOSS["change_pct"], color=np.where(CATEGORY_LOSS["change_pct"] < 0, "tab:green", "tab:red"))
+    for yi, v in zip(y, CATEGORY_LOSS["change_pct"]):
+        ax_catd.text(v, yi, f" {v:+.1f}%", va="center", fontsize=8)
+    ax_catd.axvline(0, color="black", lw=0.8)
+    ax_catd.set_yticks(y, CATEGORY_LOSS.index); ax_catd.invert_yaxis()
+ax_cat.set_title("Eval loss theo nhóm"); ax_cat.set_xlabel("eval loss")
+ax_catd.set_title("Thay đổi eval loss theo nhóm (%, âm = tốt hơn)"); ax_catd.set_xlabel("%")
+
+for a in (ax_loss, ax_gap, ax_gn, ax_lr, ax_tps, ax_mem):
+    a.set_xlabel("step")
 for a in ax.flatten():
-    a.set_xlabel("step"); a.grid(alpha=0.3)
+    a.grid(alpha=0.3)
 color = {"HEALTHY": "green", "OVERFIT": "darkorange", "UNDERFIT": "darkorange", "UNSTABLE": "red"}.get(DIAG_CODE, "black")
 fig.suptitle(f"{RUN_NAME}  —  {DIAG_CODE}", fontsize=15, fontweight="bold", color=color)
 fig.text(0.5, 0.005, SPECS_LINE + "\n" + DIAG_MSG, ha="center", fontsize=9, family="monospace")
@@ -471,6 +567,7 @@ RUN_RECORD = dict(
         train_runtime_min=train_result.metrics["train_runtime"] / 60,
     ),
     health=HEALTH,
+    category_eval_loss=CATEGORY_LOSS.round(4).to_dict(orient="index"),
     diagnosis=dict(code=DIAG_CODE, message=DIAG_MSG),
 )
 record_json = json.dumps(RUN_RECORD, ensure_ascii=False, indent=2, default=str)
@@ -478,6 +575,72 @@ for target in [Path("/kaggle/working/run_record.json"), Path(CONFIG["adapter_dir
     target.write_text(record_json, encoding="utf-8")
 shutil.copy("/kaggle/working/training_log.csv", Path(CONFIG["adapter_dir"]) / "training_log.csv")
 print(record_json[:3000])
+
+# %% [markdown]
+# ## Báo cáo (`REPORT.md`)
+
+# %%
+def md_table(df):
+    cols = [str(c) for c in df.columns]
+    rows = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
+    rows += ["| " + " | ".join("" if pd.isna(v) else (f"{v:.4f}" if isinstance(v, float) else str(v)) for v in r) + " |"
+             for r in df.itertuples(index=False)]
+    return "\n".join(rows)
+
+
+HEALTH_ROWS = [
+    ("eval_loss_first → best → final", f"{HEALTH.get('eval_loss_first', float('nan')):.4f} → "
+     f"{HEALTH.get('eval_loss_best', float('nan')):.4f} (step {HEALTH.get('best_step')}) → {HEALTH.get('eval_loss_final', float('nan')):.4f}",
+     "giảm rồi đi ngang"),
+    ("improvement_pct", f"{HEALTH.get('improvement_pct', float('nan')):.1f}%", "≥ 5%"),
+    ("overfit_rise_pct", f"{HEALTH.get('overfit_rise_pct', float('nan')):.1f}%", "≤ 5%"),
+    ("train probe loss cuối", f"{HEALTH.get('final_train_loss', float('nan')):.4f}", "thấp hơn eval một chút"),
+    ("train loss lúc train (log)", f"{HEALTH.get('final_train_loss_logged', float('nan')):.4f}", "chỉ để tham khảo"),
+    ("generalization_gap (eval − probe)", f"{HEALTH.get('generalization_gap', float('nan')):.4f}", "nhỏ, không tăng dần"),
+    ("steps_to_90pct", str(HEALTH.get("steps_to_90pct")), "nhỏ = hội tụ nhanh"),
+    ("loss_spikes / NaN steps", f"{HEALTH.get('loss_spikes', 0)} / {HEALTH.get('nan_or_inf_steps', 0)}", "0 / 0"),
+    ("grad_norm p50 / p95 / max", f"{HEALTH.get('grad_norm_p50', float('nan')):.3f} / {HEALTH.get('grad_norm_p95', float('nan')):.3f} / "
+     f"{HEALTH.get('grad_norm_max', float('nan')):.3f}", "max không gấp nhiều lần p95"),
+    ("tokens/s trung bình", f"{HEALTH.get('tokens_per_sec_mean', float('nan')):.0f}", "để so chi phí"),
+    ("VRAM đỉnh", f"{HEALTH.get('vram_peak_gb', float('nan')):.1f} / {VRAM_TOTAL_GB:.1f} GB", "dưới giới hạn"),
+]
+cat_md = (md_table(CATEGORY_LOSS.reset_index(names="category").round(4)) if not CATEGORY_LOSS.empty
+          else "_Không đo được eval loss theo nhóm._")
+report = "\n".join([
+    f"# Báo cáo SFT `{RUN_ID}`",
+    "",
+    f"**Chẩn đoán: `{DIAG_CODE}`.** {DIAG_MSG}",
+    "",
+    "## 1. Specs",
+    "",
+    f"`{SPECS_LINE}`",
+    "",
+    f"- Dữ liệu: train {DATA_STATS['n_train']} mẫu · val {DATA_STATS['n_val']} mẫu · train probe {len(trainer.eval_dataset['train_probe'])} mẫu · "
+    f"token trung bình {DATA_STATS['mean_tokens']}, P95 {DATA_STATS['p95_tokens']}, max {DATA_STATS['max_tokens']}",
+    f"- Bước: {trainer.state.global_step} / {TOTAL_STEPS} (warmup {WARMUP_STEPS}) · dừng sớm: {RUN_RECORD['results']['stopped_early']} · "
+    f"thời gian {RUN_RECORD['results']['train_runtime_min']:.1f} phút",
+    f"- Môi trường: {GPU.name}, {PRECISION}, torch {torch.__version__}, transformers {transformers.__version__}, "
+    f"trl {trl.__version__}, unsloth {RUN_RECORD['environment']['unsloth']}",
+    "",
+    "## 2. Chỉ số sức khỏe",
+    "",
+    md_table(pd.DataFrame(HEALTH_ROWS, columns=["Chỉ số", "Giá trị", "Khỏe khi"])),
+    "",
+    "## 3. Eval loss theo nhóm (trước = mô hình gốc, sau = checkpoint tốt nhất)",
+    "",
+    cat_md,
+    "",
+    "Nhóm giảm nhiều = mô hình học được hành vi đó. Nhóm gần như không đổi hoặc tăng = cần thêm dữ liệu hoặc kiểm tra nhãn.",
+    "",
+    "## 4. Biểu đồ",
+    "",
+    "![](training_health.png)",
+    "",
+    "**Cách đọc:** cam (eval) và xanh lá (train probe) cùng giảm là học tốt; cam đi lên trong khi xanh lá vẫn giảm là overfit; "
+    "cả hai cao và phẳng là underfit. Loss lúc train (xanh nhạt) có thể bị phóng đại theo hệ số gom batch, đừng so trực tiếp với eval.",
+])
+Path("/kaggle/working/REPORT.md").write_text(report, encoding="utf-8")
+print(report)
 
 # %% [markdown]
 # ## Thử nhanh 2 câu
