@@ -94,16 +94,40 @@ model.eval()
 # Cùng công thức loss có mặt nạ như lúc train: chỉ tính trên token của assistant. Perplexity = $\exp(\text{loss trung bình})$, càng thấp càng tốt.
 
 # %%
+def _ids(messages, add_generation_prompt=False):
+    out = tokenizer.apply_chat_template(messages, add_generation_prompt=add_generation_prompt, tokenize=True)
+    if hasattr(out, "input_ids"):
+        out = out["input_ids"]
+    if torch.is_tensor(out):
+        out = out.view(-1).tolist()
+    return list(out)
+
+
 @torch.no_grad()
 def completion_nll(messages):
-    prompt_ids = tokenizer.apply_chat_template(messages[:-1], add_generation_prompt=True, tokenize=True)
-    full_ids = tokenizer.apply_chat_template(messages, tokenize=True)
+    # Unsloth có thể trả logits dài bằng max_seq_length dù câu ngắn hơn, nên cắt cho khớp trước khi tính loss.
+    prompt_ids = _ids(messages[:-1], add_generation_prompt=True)
+    full_ids = _ids(messages)
+    overflow = len(full_ids) - CONFIG["max_seq_length"]
+    if overflow > 0:
+        full_ids = full_ids[overflow:]
+        prompt_ids = prompt_ids[overflow:]
     ids = torch.tensor([full_ids], device="cuda")
-    logits = model(input_ids=ids).logits[0, :-1].float()
+    logits = model(input_ids=ids).logits
+    if logits.dim() == 3:
+        logits = logits[0]
+    logits = logits[:-1].float()
     targets = ids[0, 1:].clone()
-    targets[: len(prompt_ids) - 1] = -100
+    n = min(logits.shape[0], targets.shape[0])
+    logits, targets = logits[:n], targets[:n]
+    prompt_cut = min(max(len(prompt_ids) - 1, 0), n)
+    if prompt_cut:
+        targets[:prompt_cut] = -100
+    n_tokens = int((targets != -100).sum().item())
+    if n_tokens == 0:
+        return 0.0, 0
     loss = F.cross_entropy(logits, targets, ignore_index=-100, reduction="sum")
-    return loss.item(), int((targets != -100).sum().item())
+    return loss.item(), n_tokens
 
 
 VARIANTS = ["base", "finetuned"]
@@ -122,6 +146,9 @@ for variant in VARIANTS:
             totals[r["category"]][0] += nll
             totals[r["category"]][1] += n
     for category, (nll, n) in totals.items():
+        if n == 0:
+            print(f"⚠️ {variant}/{category}: không còn token câu trả lời sau khi cắt, bỏ qua perplexity")
+            continue
         ppl_rows.append(dict(variant=variant, category=category, metric="perplexity", value=float(torch.exp(torch.tensor(nll / n)))))
 
 ppl_table = pd.DataFrame(ppl_rows).pivot_table(index="category", columns="variant", values="value")[VARIANTS]
@@ -141,8 +168,13 @@ FastLanguageModel.for_inference(model)
 
 @torch.no_grad()
 def generate(batch, max_new_tokens):
+    # Giữ đuôi prompt (câu hỏi). Prompt + câu sinh phải nằm trong max_seq_length, nếu không mask 1024 lệch với 1124.
     prompts = [tokenizer.apply_chat_template(r["messages"][:-1], add_generation_prompt=True, tokenize=False) for r in batch]
-    enc = tokenizer(prompts, return_tensors="pt", padding=True, add_special_tokens=False).to("cuda")
+    tokenizer.truncation_side = "left"
+    enc = tokenizer(
+        prompts, return_tensors="pt", padding=True, truncation=True,
+        max_length=CONFIG["max_seq_length"] - max_new_tokens, add_special_tokens=False,
+    ).to("cuda")
     out = model.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=tokenizer.pad_token_id)
     return tokenizer.batch_decode(out[:, enc["input_ids"].shape[1]:], skip_special_tokens=True)
 

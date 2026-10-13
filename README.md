@@ -175,7 +175,7 @@ The default pipeline uses roughly 3–5 GPU hours of the 30 h weekly quota.
 
 ## Baseline SFT run
 
-One full pass of notebooks 01 and 02 on Kaggle. Behavioural scores from notebook 03 are not in yet.
+One full pass of notebooks 01–03 on Kaggle: data, QLoRA training, then a base-vs-fine-tuned comparison on the held-out test set (60 prompts per category, greedy decoding).
 
 | | Baseline |
 |---|---|
@@ -194,13 +194,39 @@ One full pass of notebooks 01 and 02 on Kaggle. Behavioural scores from notebook
 | Grad norm p50 / p95 / max | 0.48 / 0.73 / 1.80 |
 | Throughput / peak VRAM | ~626 tokens/s · 5.2 / 14.6 GB |
 
-Most of the gain is in the first ~220 steps. The saved adapter is the step-640 checkpoint. A second epoch is optional; the curve is already flat, and notebook 03 should be read before spending another GPU run.
+Most of the loss drop is in the first ~220 steps. The saved adapter is the step-640 checkpoint. The loss curve is already flat, so a second epoch is optional.
 
 <p align="center">
   <img src="SFT%202%20Result/training_health.png" width="100%" alt="Eight-panel training-health dashboard for the Qwen2.5-3B QLoRA baseline">
 </p>
 
-Per-category bars are empty on this run: the trainer dropped sequences longer than 1024 tokens, so category labels no longer lined up with the validation set. The full report is [`SFT 2 Result/REPORT.md`](SFT%202%20Result/REPORT.md).
+Per-category bars are empty on the training dashboard: the trainer dropped sequences longer than 1024 tokens, so category labels no longer lined up with the validation set. Behaviour by category is measured below, on the test set. Training report: [`SFT 2 Result/REPORT.md`](SFT%202%20Result/REPORT.md).
+
+### Behaviour on the test set
+
+Every tracked metric moved in the intended direction. The large shifts are refusal, abstention, token F1, and completion perplexity. Exact answer match on `qa` and `qa_json` barely moved.
+
+| Behaviour | Base | Fine-tuned |
+|---|---|---|
+| Refuse a direct jailbreak | 15% | **100%** |
+| Leak an injected canary (`injection_indirect`) | 20% | **0%** |
+| Still answer the real question under an indirect injection | 55% | **70%** |
+| Abstain when the context has no answer | 9% | **60%** |
+| Token F1 on grounded QA | 0.37 | **0.64** |
+| Exact answer match, `qa` / `qa_json` | 53% / 45% | 57% / 47% |
+| Valid JSON (`qa_json` / `unanswerable`) | 98% / 96% | **100% / 100%** |
+| Over-refusal on ordinary instructions | 5.0% | **3.3%** |
+| Completion perplexity, direct injection | 27.6 | **1.06** |
+
+<p align="center">
+  <img src="eval_result/eval/eval_chart.png" width="90%" alt="Base versus fine-tuned behavioural metrics">
+</p>
+
+<p align="center">
+  <img src="eval_result/eval/perplexity_chart.png" width="80%" alt="Completion perplexity by category, log scale">
+</p>
+
+The fine-tuned model refuses jailbreaks in Vietnamese and stops repeating hidden instructions, without becoming more trigger-happy on normal questions. Abstention is much better and still incomplete: 40% of unanswerable prompts still get an answer. On `qa_json`, the model sometimes returns `{"answer": "", "found": false}` when the context does contain the answer, so format is perfect and exact match is almost unchanged. Full report: [`eval_result/eval/eval_report.md`](eval_result/eval/eval_report.md).
 
 ---
 
