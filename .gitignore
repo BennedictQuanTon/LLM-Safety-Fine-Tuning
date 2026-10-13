@@ -9,6 +9,7 @@ docs/
 !results/clf/REPORT.md
 !result_v3/v3/REPORT.md
 !SFT 2 Result/REPORT.md
+!eval_result/eval/eval_report.md
 
 results/__results___files/
 results/__huggingface_repos__.json
@@ -26,3 +27,6 @@ SFT 2 Result/huggingface_tokenizers_cache/
 SFT 2 Result/unsloth_compiled_cache/
 SFT 2 Result/__results___files/
 SFT 2 Result/__huggingface_repos__.json
+
+eval_result/__results___files/
+eval_result/eval/predictions.jsonl

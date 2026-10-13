@@ -1,0 +1,1 @@
+{"repos": [{"repoId": "unsloth/Qwen2.5-3B-Instruct-bnb-4bit", "repoType": "model", "commitHash": "2672b588848527e456d320c11926c794539f47d5", "filePaths": ["vocab.json", "tokenizer_config.json", "special_tokens_map.json", "model.safetensors", ".gitattributes", "tokenizer.json", "generation_config.json", "README.md", "config.json", "merges.txt", "added_tokens.json"]}]}
